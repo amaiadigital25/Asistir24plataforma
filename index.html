@@ -2,35 +2,202 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Asistir24</title>
-  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* ====== ESTILOS GENERALES ====== */
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f2f5;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    /* ====== BOTONES PRINCIPALES ====== */
+    .botones-principales {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin: 30px 0;
+    }
+
+    .botones-principales button {
+      padding: 12px 25px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: none;
+      transition: 0.3s;
+    }
+
+    #btnAsociate {
+      background-color: #4CAF50;
+      color: white;
+    }
+
+    #btnAsociate:hover {
+      background-color: #45a049;
+    }
+
+    #btnEmergencia {
+      background-color: #f44336;
+      color: white;
+    }
+
+    #btnEmergencia:hover {
+      background-color: #e53935;
+    }
+
+    /* ====== MODAL ====== */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal-content {
+      background-color: #fff;
+      margin: 10% auto;
+      padding: 20px;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 400px;
+      position: relative;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+
+    .modal h2 {
+      margin-top: 0;
+      text-align: center;
+      color: #333;
+    }
+
+    .close {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .modal input {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+
+    .modal button[type="submit"] {
+      padding: 10px;
+      width: 100%;
+      border: none;
+      border-radius: 5px;
+      background-color: #4CAF50;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .modal button[type="submit"]:hover {
+      background-color: #45a049;
+    }
+
+  </style>
 </head>
 <body>
 
-<header>
-  <img src="img/logo-24.png" class="logo">
-  <h1>Asistir24</h1>
-</header>
+  <h1>Bienvenido a Asistir24</h1>
 
-<section class="banner">
-  <img src="img/banner-24.png">
-</section>
+  <!-- ====== BOTONES ====== -->
+  <div class="botones-principales">
+    <button id="btnAsociate">💳 Asociarse</button>
+    <button id="btnEmergencia">🚨 Emergencia</button>
+  </div>
 
-<div class="login-box">
-  <h2>Ingreso</h2>
+  <!-- ====== MODAL ASOCIARSE ====== -->
+  <div id="modalAsociate" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeAsociate">&times;</span>
+      <h2>Formulario de Asociación</h2>
+      <form id="formAsociate">
+        <input type="text" name="nombre" placeholder="Nombre completo" required>
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="text" name="marca" placeholder="Marca del vehículo" required>
+        <input type="text" name="modelo" placeholder="Modelo del vehículo" required>
+        <input type="text" name="patente" placeholder="Patente" required>
+        <input type="text" name="seguro" placeholder="Seguro" required>
+        <button type="submit">Enviar</button>
+      </form>
+    </div>
+  </div>
 
-  <input type="text" id="user" placeholder="Usuario">
-  
-  <select id="role">
-    <option value="cliente">Cliente</option>
-    <option value="prestador">Prestador</option>
-    <option value="admin">Admin</option>
-  </select>
+  <!-- ====== MODAL EMERGENCIA ====== -->
+  <div id="modalEmergencia" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeEmergencia">&times;</span>
+      <h2>Formulario de Emergencia</h2>
+      <form id="formEmergencia">
+        <input type="text" name="nombre" placeholder="Nombre completo" required>
+        <input type="text" name="ubicacion" placeholder="Ubicación actual" required>
+        <input type="text" name="descripcion" placeholder="Descripción del problema" required>
+        <button type="submit">Enviar</button>
+      </form>
+    </div>
+  </div>
 
-  <button onclick="login()">Ingresar</button>
-</div>
+  <!-- ====== JAVASCRIPT ====== -->
+  <script>
+    // ===== Asociarse =====
+    const modalAsociate = document.getElementById("modalAsociate");
+    const btnAsociate = document.getElementById("btnAsociate");
+    const closeAsociate = document.getElementById("closeAsociate");
 
-<script src="app.js"></script>
+    btnAsociate.onclick = () => modalAsociate.style.display = "block";
+    closeAsociate.onclick = () => modalAsociate.style.display = "none";
+
+    // ===== Emergencia =====
+    const modalEmergencia = document.getElementById("modalEmergencia");
+    const btnEmergencia = document.getElementById("btnEmergencia");
+    const closeEmergencia = document.getElementById("closeEmergencia");
+
+    btnEmergencia.onclick = () => modalEmergencia.style.display = "block";
+    closeEmergencia.onclick = () => modalEmergencia.style.display = "none";
+
+    // ===== Cerrar modal al hacer clic fuera =====
+    window.onclick = (event) => {
+      if (event.target == modalAsociate) modalAsociate.style.display = "none";
+      if (event.target == modalEmergencia) modalEmergencia.style.display = "none";
+    }
+
+    // ===== Formularios =====
+    document.getElementById("formAsociate").addEventListener("submit", (e) => {
+      e.preventDefault();
+      alert("Formulario de Asociación enviado!");
+      modalAsociate.style.display = "none";
+      // Aquí puedes agregar fetch() para enviar datos a tu backend
+    });
+
+    document.getElementById("formEmergencia").addEventListener("submit", (e) => {
+      e.preventDefault();
+      alert("Formulario de Emergencia enviado!");
+      modalEmergencia.style.display = "none";
+      // Aquí puedes agregar fetch() para enviar datos a tu backend
+    });
+  </script>
 
 </body>
 </html>
