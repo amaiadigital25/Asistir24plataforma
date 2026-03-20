@@ -1,0 +1,63 @@
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #0d1117;
+  color: white;
+  text-align: center;
+}
+
+header {
+  padding: 20px;
+}
+
+.logo {
+  width: 80px;
+}
+
+.banner img {
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+}
+
+.login-box {
+  background: #161b22;
+  padding: 20px;
+  margin: 20px auto;
+  width: 300px;
+  border-radius: 10px;
+}
+
+input, select {
+  width: 90%;
+  padding: 10px;
+  margin: 10px;
+  border-radius: 5px;
+  border: none;
+}
+
+button {
+  padding: 10px;
+  width: 100%;
+  background: #238636;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #2ea043;
+}
+
+.btn-red {
+  background: red;
+}
+.chat-box {
+  background: #161b22;
+  margin: 20px auto;
+  padding: 15px;
+  width: 90%;
+  max-width: 400px;
+  border-radius: 10px;
+  text-align: left;
+}

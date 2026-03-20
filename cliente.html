@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Cliente</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<h1>Panel Cliente</h1>
+
+<button class="btn-red" onclick="iniciarChat()">🚨 Pedir Emergencia</button>
+
+<div id="chat" class="chat-box"></div>
+
+<script>
+function iniciarChat() {
+  const chat = document.getElementById("chat");
+
+  chat.innerHTML += "<p><b>🤖 Asistir24:</b> Recibimos tu solicitud...</p>";
+
+  setTimeout(() => {
+    chat.innerHTML += "<p><b>🤖:</b> Buscando prestador cercano...</p>";
+  }, 1500);
+
+  setTimeout(() => {
+    chat.innerHTML += "<p><b>🤖:</b> 🚗 Unidad asignada</p>";
+  }, 3000);
+
+  setTimeout(() => {
+    chat.innerHTML += "<p><b>🤖:</b> Tiempo estimado: 10 minutos</p>";
+  }, 4500);
+}
+</script>
+
+</body>
+</html>
