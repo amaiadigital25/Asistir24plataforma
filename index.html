@@ -5,25 +5,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Asistir24</title>
   <style>
-    /* ====== ESTILOS GENERALES ====== */
+    /* ===== COLORES Y ESTILO GENERAL ===== */
     body {
       font-family: Arial, sans-serif;
-      background-color: #f0f2f5;
-      margin: 0;
-      padding: 20px;
-    }
-
-    h1 {
-      text-align: center;
+      background-color: #ffffff; /* blanco de fondo */
       color: #333;
+      margin: 0;
+      padding: 0;
+      text-align: center;
     }
 
-    /* ====== BOTONES PRINCIPALES ====== */
+    /* ===== LOGO Y BANNER ===== */
+    .header {
+      background-color: #003399; /* azul */
+      padding: 20px 0;
+    }
+
+    .header img {
+      max-width: 200px;
+      height: auto;
+      margin: 10px;
+    }
+
+    .banner img {
+      width: 100%;
+      height: auto;
+    }
+
+    /* ===== LOGIN ===== */
+    .login {
+      margin: 20px auto;
+      padding: 20px;
+      background-color: #e6f0ff; /* azul claro */
+      border-radius: 10px;
+      max-width: 400px;
+    }
+
+    .login input {
+      width: 90%;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+
+    .login button {
+      padding: 10px 20px;
+      margin-top: 10px;
+      background-color: #ff3333; /* rojo */
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .login button:hover {
+      background-color: #cc0000;
+    }
+
+    /* ===== BOTONES PRINCIPALES ===== */
     .botones-principales {
       display: flex;
       justify-content: center;
-      gap: 10px;
-      margin: 30px 0;
+      gap: 15px;
+      margin: 20px 0;
     }
 
     .botones-principales button {
@@ -35,25 +82,13 @@
       transition: 0.3s;
     }
 
-    #btnAsociate {
-      background-color: #4CAF50;
-      color: white;
-    }
+    #btnAsociate { background-color: #003399; color: white; }
+    #btnAsociate:hover { background-color: #002080; }
 
-    #btnAsociate:hover {
-      background-color: #45a049;
-    }
+    #btnEmergencia { background-color: #ff3333; color: white; }
+    #btnEmergencia:hover { background-color: #cc0000; }
 
-    #btnEmergencia {
-      background-color: #f44336;
-      color: white;
-    }
-
-    #btnEmergencia:hover {
-      background-color: #e53935;
-    }
-
-    /* ====== MODAL ====== */
+    /* ===== MODALES ===== */
     .modal {
       display: none;
       position: fixed;
@@ -67,10 +102,10 @@
     }
 
     .modal-content {
-      background-color: #fff;
+      background-color: #ffffff;
       margin: 10% auto;
       padding: 20px;
-      border-radius: 8px;
+      border-radius: 10px;
       width: 90%;
       max-width: 400px;
       position: relative;
@@ -79,8 +114,7 @@
 
     .modal h2 {
       margin-top: 0;
-      text-align: center;
-      color: #333;
+      color: #003399;
     }
 
     .close {
@@ -89,6 +123,7 @@
       right: 15px;
       font-size: 24px;
       cursor: pointer;
+      color: #ff3333;
     }
 
     .modal input {
@@ -97,7 +132,6 @@
       margin: 5px 0;
       border-radius: 5px;
       border: 1px solid #ccc;
-      box-sizing: border-box;
     }
 
     .modal button[type="submit"] {
@@ -105,7 +139,7 @@
       width: 100%;
       border: none;
       border-radius: 5px;
-      background-color: #4CAF50;
+      background-color: #003399;
       color: white;
       font-size: 16px;
       cursor: pointer;
@@ -113,22 +147,40 @@
     }
 
     .modal button[type="submit"]:hover {
-      background-color: #45a049;
+      background-color: #002080;
     }
 
   </style>
 </head>
 <body>
 
-  <h1>Bienvenido a Asistir24</h1>
+  <!-- ===== HEADER: LOGO ===== -->
+  <div class="header">
+    <img src="logo-24.png" alt="Logo Asistir24">
+  </div>
 
-  <!-- ====== BOTONES ====== -->
+  <!-- ===== BANNER ===== -->
+  <div class="banner">
+    <img src="banner-24.png" alt="Banner Asistir24">
+  </div>
+
+  <!-- ===== LOGIN ===== -->
+  <div class="login">
+    <h2>Ingreso</h2>
+    <form id="loginForm">
+      <input type="text" id="user" placeholder="Usuario" required>
+      <input type="password" id="password" placeholder="Contraseña" required>
+      <button type="submit">Ingresar</button>
+    </form>
+  </div>
+
+  <!-- ===== BOTONES PRINCIPALES ===== -->
   <div class="botones-principales">
     <button id="btnAsociate">💳 Asociarse</button>
     <button id="btnEmergencia">🚨 Emergencia</button>
   </div>
 
-  <!-- ====== MODAL ASOCIARSE ====== -->
+  <!-- ===== MODAL ASOCIARSE ===== -->
   <div id="modalAsociate" class="modal">
     <div class="modal-content">
       <span class="close" id="closeAsociate">&times;</span>
@@ -145,7 +197,7 @@
     </div>
   </div>
 
-  <!-- ====== MODAL EMERGENCIA ====== -->
+  <!-- ===== MODAL EMERGENCIA ===== -->
   <div id="modalEmergencia" class="modal">
     <div class="modal-content">
       <span class="close" id="closeEmergencia">&times;</span>
@@ -159,9 +211,18 @@
     </div>
   </div>
 
-  <!-- ====== JAVASCRIPT ====== -->
+  <!-- ===== JAVASCRIPT ===== -->
   <script>
-    // ===== Asociarse =====
+    // ===== LOGIN =====
+    document.getElementById("loginForm").addEventListener("submit", function(e){
+      e.preventDefault();
+      const user = document.getElementById("user").value;
+      const password = document.getElementById("password").value;
+      // Aquí podrías validar usuario real
+      alert("Bienvenido " + user + "!");
+    });
+
+    // ===== MODALES =====
     const modalAsociate = document.getElementById("modalAsociate");
     const btnAsociate = document.getElementById("btnAsociate");
     const closeAsociate = document.getElementById("closeAsociate");
@@ -169,7 +230,6 @@
     btnAsociate.onclick = () => modalAsociate.style.display = "block";
     closeAsociate.onclick = () => modalAsociate.style.display = "none";
 
-    // ===== Emergencia =====
     const modalEmergencia = document.getElementById("modalEmergencia");
     const btnEmergencia = document.getElementById("btnEmergencia");
     const closeEmergencia = document.getElementById("closeEmergencia");
@@ -177,25 +237,22 @@
     btnEmergencia.onclick = () => modalEmergencia.style.display = "block";
     closeEmergencia.onclick = () => modalEmergencia.style.display = "none";
 
-    // ===== Cerrar modal al hacer clic fuera =====
     window.onclick = (event) => {
-      if (event.target == modalAsociate) modalAsociate.style.display = "none";
-      if (event.target == modalEmergencia) modalEmergencia.style.display = "none";
+      if(event.target == modalAsociate) modalAsociate.style.display = "none";
+      if(event.target == modalEmergencia) modalEmergencia.style.display = "none";
     }
 
-    // ===== Formularios =====
+    // ===== FORMULARIOS =====
     document.getElementById("formAsociate").addEventListener("submit", (e) => {
       e.preventDefault();
       alert("Formulario de Asociación enviado!");
       modalAsociate.style.display = "none";
-      // Aquí puedes agregar fetch() para enviar datos a tu backend
     });
 
     document.getElementById("formEmergencia").addEventListener("submit", (e) => {
       e.preventDefault();
       alert("Formulario de Emergencia enviado!");
       modalEmergencia.style.display = "none";
-      // Aquí puedes agregar fetch() para enviar datos a tu backend
     });
   </script>
 
