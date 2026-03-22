@@ -3,17 +3,17 @@ const path = require('path');
 
 const app = express();
 
-// Servir archivos estáticos
-app.use(express.static(path.join(__dirname, 'public')));
+// 🔥 IMPORTANTE: apuntamos a public/frontend
+app.use(express.static(path.join(__dirname, 'public/frontend')));
 
-// Ruta de prueba API
-app.get('/api', (req, res) => {
-  res.send('API funcionando 🚀');
+// ruta principal
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/frontend', 'index.html'));
 });
 
-// Ruta principal
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// fallback (evita Not Found)
+app.use((req, res) => {
+  res.sendFile(path.join(__dirname, 'public/frontend', 'index.html'));
 });
 
 const PORT = process.env.PORT || 3000;
