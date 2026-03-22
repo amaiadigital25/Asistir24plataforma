@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin - Asistir24</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      background: #111;
+      color: white;
+      padding: 20px;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+    }
+
+    input, select, button {
+      padding: 8px;
+      margin: 5px;
+      border-radius: 5px;
+      border: none;
+    }
+
+    input, select {
+      background: #222;
+      color: white;
+    }
+
+    button {
+      background: #00c853;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #00e676;
+    }
+
+    .danger {
+      background: red;
+    }
+
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      background: #222;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #444;
+      text-align: left;
+    }
+
+    th {
+      background: #333;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>Panel Admin</h2>
+
+<button onclick="logout()" class="danger">Cerrar sesión</button>
+
+<h3>Agregar Usuario</h3>
+
+<input type="text" id="newUser" placeholder="Usuario">
+<input type="password" id="newPass" placeholder="Contraseña">
+
+<select id="newRole">
+  <option value="user">Usuario</option>
+  <option value="admin">Admin</option>
+</select>
+
+<button onclick="addUser()">Guardar</button>
+
+<h3>Lista de Usuarios</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Usuario</th>
+      <th>Rol</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody id="tableBody"></tbody>
+</table>
+
+<script>
+const API = "http:asistir24plataforma-production.up.railway.app";
+
+// 🔐 Protección
+if (localStorage.getItem("role") !== "admin") {
+  alert("No autorizado");
+  window.location.href = "login.html";
+}
+
+let users = [];
+
+// 📥 Cargar usuarios
+async function loadUsers() {
+  const res = await fetch(API, {
+    headers: {
+      "Authorization": localStorage.getItem("token")
+    }
+  });
+
+  users = await res.json();
+  render();
+}
+
+// 🎨 Render
+function render() {
+  const table = document.getElementById("tableBody");
+  table.innerHTML = "";
+
+  users.forEach(u => {
+    table.innerHTML += `
+      <tr>
+        <td>${u.user}</td>
+        <td>${u.role}</td>
+        <td>
+          <button onclick="editUser(${u.id})">Editar</button>
+          <button class="danger" onclick="deleteUser(${u.id})">Eliminar</button>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+// ➕ Agregar usuario
+async function addUser() {
+  const user = document.getElementById("newUser").value;
+  const password = document.getElementById("newPass").value;
+  const role = document.getElementById("newRole").value;
+
+  if (!user || !password) {
+    alert("Completar datos");
+    return;
+  }
+
+  await fetch(API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": localStorage.getItem("token")
+    },
+    body: JSON.stringify({ user, password, role })
+  });
+
+  document.getElementById("newUser").value = "";
+  document.getElementById("newPass").value = "";
+
+  loadUsers();
+}
+
+// ✏️ Editar usuario
+async function editUser(id) {
+  const newUser = prompt("Nuevo nombre:");
+  if (!newUser) return;
+
+  await fetch(API + "/" + id, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": localStorage.getItem("token")
+    },
+    body: JSON.stringify({ user: newUser })
+  });
+
+  loadUsers();
+}
+
+// ❌ Eliminar
+async function deleteUser(id) {
+  if (!confirm("¿Eliminar usuario?")) return;
+
+  await fetch(API + "/" + id, {
+    method: "DELETE",
+    headers: {
+      "Authorization": localStorage.getItem("token")
+    }
+  });
+
+  loadUsers();
+}
+
+// 🚪 Logout
+function logout() {
+  localStorage.clear();
+  window.location.href = "login.html";
+}
+
+// 🔄 Init
+loadUsers();
+</script>
+
+</body>
+</html>
