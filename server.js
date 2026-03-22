@@ -3,15 +3,30 @@ const path = require('path');
 
 const app = express();
 
-// 🔥 IMPORTANTE: apuntamos a public/frontend
+// middlewares
+app.use(express.json());
+
+// rutas backend
+const authRoutes = require('./src/routes/authRoutes');
+app.use('/api/auth', authRoutes);
+
+// frontend
 app.use(express.static(path.join(__dirname, 'public/frontend')));
 
-// ruta principal
+// rutas directas
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public/frontend', 'index.html'));
 });
 
-// fallback (evita Not Found)
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/frontend', 'login.html'));
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/frontend', 'admin.html'));
+});
+
+// fallback
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, 'public/frontend', 'index.html'));
 });
