@@ -1,14 +1,9 @@
-import express from "express";
-import {
-  solicitarServicio,
-  listarServicios,
-  aceptarServicio
-} from "../controllers/serviceController.js";
-
+const express = require('express');
 const router = express.Router();
+const serviceController = require('../controllers/serviceController');
+const auth = require('../middlewares/authMiddleware');
 
-router.post("/solicitar", solicitarServicio);
-router.get("/", listarServicios);
-router.put("/aceptar/:id", aceptarServicio);
+router.post('/', auth, serviceController.createService);
+router.get('/', auth, serviceController.getServices);
 
-export default router;
+module.exports = router;

@@ -1,38 +1,23 @@
-	mport { createService, getServices, updateService } from "../models/Service.js";
+const { readDB, writeDB } = require('../config/db');
 
-export const solicitarServicio = (req, res) => {
-  const { usuario, tipo, ubicacion } = req.body;
+exports.createService = (req, res) => {
+  const { name, description } = req.body;
 
-  if (!usuario || !tipo) {
-    return res.status(400).json({ error: "Faltan datos" });
-  }
+  const db = readDB();
 
-  const servicio = createService({
-    usuario,
-    tipo,
-    ubicacion,
-  });
+  const newService = {
+    id: Date.now(),
+    name,
+    description
+  };
 
-  res.json(servicio);
+  db.services.push(newService);
+  writeDB(db);
+
+  res.json({ message: "Servicio creado" });
 };
 
-export const listarServicios = (req, res) => {
-  const servicios = getServices();
-  res.json(servicios);
-};
-
-export const aceptarServicio = (req, res) => {
-  const { id } = req.params;
-  const { proveedor } = req.body;
-
-  const servicio = updateService(id, {
-    estado: "aceptado",
-    proveedor,
-  });
-
-  if (!servicio) {
-    return res.status(404).json({ error: "No encontrado" });
-  }
-
-  res.json(servicio);
+exports.getServices = (req, res) => {
+  const db = readDB();
+  res.json(db.services);
 };

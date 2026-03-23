@@ -1,14 +1,20 @@
 const express = require('express');
 const path = require('path');
 
-const app = express();
+const app = express(); // 🔥 PRIMERO crear app
 
 // middlewares
 app.use(express.json());
 
-// rutas backend
+// rutas
 const authRoutes = require('./src/routes/authRoutes');
+const userRoutes = require('./src/routes/userRoutes');
+const serviceRoutes = require('./src/routes/serviceRoutes');
+
+// usar rutas DESPUÉS de crear app
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/services', serviceRoutes);
 
 // frontend
 app.use(express.static(path.join(__dirname, 'public/frontend')));
@@ -24,11 +30,6 @@ app.get('/login', (req, res) => {
 
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public/frontend', 'admin.html'));
-});
-
-// fallback
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, 'public/frontend', 'index.html'));
 });
 
 const PORT = process.env.PORT || 3000;

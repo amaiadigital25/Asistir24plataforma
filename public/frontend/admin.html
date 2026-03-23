@@ -2,4 +2,26 @@
 
 <button onclick="logout()">Cerrar sesión</button>
 
+<h3>Crear Usuario</h3>
+<input id="user" placeholder="usuario">
+<input id="pass" placeholder="password">
+<select id="role">
+  <option value="admin">Admin</option>
+  <option value="provider">Proveedor</option>
+</select>
+<button onclick="crearUsuario()">Crear</button>
+
+<h3>Usuarios</h3>
+<ul id="lista"></ul>
+
+<hr>
+
+<h3>Crear Servicio</h3>
+<input id="servicio" placeholder="nombre">
+<input id="desc" placeholder="descripcion">
+<button onclick="crearServicio()">Crear</button>
+
+<h3>Servicios</h3>
+<ul id="servicios"></ul>
+
 <script src="/js/admin.js"></script>
