@@ -2,259 +2,30 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Asistir24</title>
-  <style>
-    /* ===== COLORES Y ESTILO GENERAL ===== */
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #ffffff; /* blanco de fondo */
-      color: #333;
-      margin: 0;
-      padding: 0;
-      text-align: center;
-    }
-
-    /* ===== LOGO Y BANNER ===== */
-    .header {
-      background-color: #003399; /* azul */
-      padding: 20px 0;
-    }
-
-    .header img {
-      max-width: 200px;
-      height: auto;
-      margin: 10px;
-    }
-
-    .banner img {
-      width: 100%;
-      height: auto;
-    }
-
-    /* ===== LOGIN ===== */
-    .login {
-      margin: 20px auto;
-      padding: 20px;
-      background-color: #e6f0ff; /* azul claro */
-      border-radius: 10px;
-      max-width: 400px;
-    }
-
-    .login input {
-      width: 90%;
-      padding: 10px;
-      margin: 5px 0;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-      box-sizing: border-box;
-    }
-
-    .login button {
-      padding: 10px 20px;
-      margin-top: 10px;
-      background-color: #ff3333; /* rojo */
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 16px;
-    }
-
-    .login button:hover {
-      background-color: #cc0000;
-    }
-
-    /* ===== BOTONES PRINCIPALES ===== */
-    .botones-principales {
-      display: flex;
-      justify-content: center;
-      gap: 15px;
-      margin: 20px 0;
-    }
-
-    .botones-principales button {
-      padding: 12px 25px;
-      font-size: 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      border: none;
-      transition: 0.3s;
-    }
-
-    #btnAsociate { background-color: #003399; color: white; }
-    #btnAsociate:hover { background-color: #002080; }
-
-    #btnEmergencia { background-color: #ff3333; color: white; }
-    #btnEmergencia:hover { background-color: #cc0000; }
-
-    /* ===== MODALES ===== */
-    .modal {
-      display: none;
-      position: fixed;
-      z-index: 1000;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      overflow: auto;
-      background-color: rgba(0,0,0,0.5);
-    }
-
-    .modal-content {
-      background-color: #ffffff;
-      margin: 10% auto;
-      padding: 20px;
-      border-radius: 10px;
-      width: 90%;
-      max-width: 400px;
-      position: relative;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    }
-
-    .modal h2 {
-      margin-top: 0;
-      color: #003399;
-    }
-
-    .close {
-      position: absolute;
-      top: 10px;
-      right: 15px;
-      font-size: 24px;
-      cursor: pointer;
-      color: #ff3333;
-    }
-
-    .modal input {
-      width: 100%;
-      padding: 10px;
-      margin: 5px 0;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-    }
-
-    .modal button[type="submit"] {
-      padding: 10px;
-      width: 100%;
-      border: none;
-      border-radius: 5px;
-      background-color: #003399;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-      margin-top: 10px;
-    }
-
-    .modal button[type="submit"]:hover {
-      background-color: #002080;
-    }
-
-  </style>
 </head>
+
 <body>
 
-  <!-- ===== HEADER: LOGO ===== -->
-  <div class="header">
-    <img src="img/logo-24.png" alt="Logo Asistir24">
-  </div>
+<h2>Login</h2>
 
-  <!-- ===== BANNER ===== -->
-  <div class="banner">
-    <img src="img/banner-24.png" alt="Banner Asistir24">
-  </div>
+<input type="text" id="user" placeholder="Usuario">
+<input type="password" id="pass" placeholder="Contraseña">
 
-  <!-- ===== LOGIN ===== -->
-  <div class="login">
-    <h2>Ingreso</h2>
-    <form id="loginForm">
-      <input type="text" id="user" placeholder="Usuario" required>
-      <input type="password" id="password" placeholder="Contraseña" required>
-      <button type="submit">Ingresar</button>
-    </form>
-  </div>
+<button onclick="login()">Ingresar</button>
 
-  <!-- ===== BOTONES PRINCIPALES ===== -->
-  <div class="botones-principales">
-    <button id="btnAsociate">💳 Asociarse</button>
-    <button id="btnEmergencia">🚨 Emergencia</button>
-  </div>
+<script>
+function login() {
+  const user = document.getElementById("user").value;
+  const pass = document.getElementById("pass").value;
 
-  <!-- ===== MODAL ASOCIARSE ===== -->
-  <div id="modalAsociate" class="modal">
-    <div class="modal-content">
-      <span class="close" id="closeAsociate">&times;</span>
-      <h2>Formulario de Asociación</h2>
-      <form id="formAsociate">
-        <input type="text" name="nombre" placeholder="Nombre completo" required>
-        <input type="email" name="email" placeholder="Email" required>
-        <input type="text" name="marca" placeholder="Marca del vehículo" required>
-        <input type="text" name="modelo" placeholder="Modelo del vehículo" required>
-        <input type="text" name="patente" placeholder="Patente" required>
-        <input type="text" name="seguro" placeholder="Seguro" required>
-        <button type="submit">Enviar</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ===== MODAL EMERGENCIA ===== -->
-  <div id="modalEmergencia" class="modal">
-    <div class="modal-content">
-      <span class="close" id="closeEmergencia">&times;</span>
-      <h2>Formulario de Emergencia</h2>
-      <form id="formEmergencia">
-        <input type="text" name="nombre" placeholder="Nombre completo" required>
-        <input type="text" name="ubicacion" placeholder="Ubicación actual" required>
-        <input type="text" name="descripcion" placeholder="Descripción del problema" required>
-        <button type="submit">Enviar</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ===== JAVASCRIPT ===== -->
-  <script>
-    // ===== LOGIN =====
-    document.getElementById("loginForm").addEventListener("submit", function(e){
-      e.preventDefault();
-      const user = document.getElementById("user").value;
-      const password = document.getElementById("password").value;
-      // Aquí podrías validar usuario real
-      alert("Bienvenido " + user + "!");
-    });
-
-    // ===== MODALES =====
-    const modalAsociate = document.getElementById("modalAsociate");
-    const btnAsociate = document.getElementById("btnAsociate");
-    const closeAsociate = document.getElementById("closeAsociate");
-
-    btnAsociate.onclick = () => modalAsociate.style.display = "block";
-    closeAsociate.onclick = () => modalAsociate.style.display = "none";
-
-    const modalEmergencia = document.getElementById("modalEmergencia");
-    const btnEmergencia = document.getElementById("btnEmergencia");
-    const closeEmergencia = document.getElementById("closeEmergencia");
-
-    btnEmergencia.onclick = () => modalEmergencia.style.display = "block";
-    closeEmergencia.onclick = () => modalEmergencia.style.display = "none";
-
-    window.onclick = (event) => {
-      if(event.target == modalAsociate) modalAsociate.style.display = "none";
-      if(event.target == modalEmergencia) modalEmergencia.style.display = "none";
-    }
-
-    // ===== FORMULARIOS =====
-    document.getElementById("formAsociate").addEventListener("submit", (e) => {
-      e.preventDefault();
-      alert("Formulario de Asociación enviado!");
-      modalAsociate.style.display = "none";
-    });
-
-    document.getElementById("formEmergencia").addEventListener("submit", (e) => {
-      e.preventDefault();
-      alert("Formulario de Emergencia enviado!");
-      modalEmergencia.style.display = "none";
-    });
-  </script>
+  if (user === "admin" && pass === "1234") {
+    window.location.href = "admin.html";
+  } else {
+    alert("Datos incorrectos");
+  }
+}
+</script>
 
 </body>
 </html>
