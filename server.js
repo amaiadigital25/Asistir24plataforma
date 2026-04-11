@@ -7,7 +7,7 @@ const bcrypt = require("bcryptjs");
 app.use(express.json());
 app.use(cors());
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3030;
 const SECRET = "asistir24-secret";
 
 // 🗄️ Base de datos temporal
