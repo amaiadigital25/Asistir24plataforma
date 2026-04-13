@@ -1,27 +1,88 @@
-<h2>Panel Admin</h2>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin - Asistir24</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<button onclick="logout()">Cerrar sesión</button>
+  <link rel="stylesheet" href="styles.css">
+</head>
 
-<h3>Crear Usuario</h3>
-<input id="user" placeholder="usuario">
-<input id="pass" placeholder="password">
-<select id="role">
-  <option value="admin">Admin</option>
-  <option value="provider">Proveedor</option>
-</select>
-<button onclick="crearUsuario()">Crear</button>
+<body>
 
-<h3>Usuarios</h3>
-<ul id="lista"></ul>
+<header>
+  <h1>Panel Admin - Asistir24</h1>
+  <button onclick="logout()">Cerrar sesión</button>
+</header>
 
-<hr>
+<div class="container">
 
-<h3>Crear Servicio</h3>
-<input id="servicio" placeholder="nombre">
-<input id="desc" placeholder="descripcion">
-<button onclick="crearServicio()">Crear</button>
+  <div class="panel">
+    <h2>🚨 Emergencias en vivo</h2>
+    <div id="lista"></div>
+  </div>
 
-<h3>Servicios</h3>
-<ul id="servicios"></ul>
+</div>
 
-<script src="/js/admin.js"></script>
+<script>
+
+function logout() {
+  localStorage.removeItem("token");
+  window.location.href = "/";
+}
+
+// 🔥 DATOS SIMULADOS (después lo conectamos al backend)
+let emergencias = [
+  {
+    id: 1,
+    patente: "AB123CD",
+    modelo: "Gol",
+    color: "Rojo",
+    ubicacion: "https://www.google.com/maps?q=-34.60,-58.38",
+    estado: "pendiente"
+  }
+];
+
+// 🔄 MOSTRAR EMERGENCIAS
+function render() {
+  const lista = document.getElementById("lista");
+  lista.innerHTML = "";
+
+  emergencias.forEach(e => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    card.innerHTML = `
+      <h3>🚗 ${e.patente}</h3>
+      <p><b>Modelo:</b> ${e.modelo}</p>
+      <p><b>Color:</b> ${e.color}</p>
+      <p><a href="${e.ubicacion}" target="_blank">📍 Ver ubicación</a></p>
+      <p><b>Estado:</b> ${e.estado}</p>
+      <button onclick="atender(${e.id})">✅ Marcar como atendido</button>
+    `;
+
+    lista.appendChild(card);
+  });
+}
+
+// ✅ CAMBIAR ESTADO
+function atender(id) {
+  emergencias = emergencias.map(e => {
+    if (e.id === id) {
+      e.estado = "atendido";
+    }
+    return e;
+  });
+
+  render();
+}
+
+// 🔄 AUTO REFRESH (simula tiempo real)
+setInterval(render, 2000);
+
+render();
+
+</script>
+
+</body>
+</html>
