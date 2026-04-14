@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="login-bg">
+
+<div class="login-card">
+
+<h1>Asistir24</h1>
+
+<select id="tipo">
+<option value="user">Usuario</option>
+<option value="admin">Administrador</option>
+</select>
+
+<input id="user" placeholder="Usuario">
+<input type="password" id="pass" placeholder="Contraseña">
+
+<button class="btn-primary" onclick="login()">Ingresar</button>
+
+</div>
+
+<script>
+const API = "https://asistir24plataforma-production.up.railway.app";
+
+async function login(){
+  const username = user.value;
+  const password = pass.value;
+
+  const res = await fetch(API + "/login", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ username, password })
+  });
+
+  const data = await res.json();
+
+  if(data.success){
+    if(data.role === "admin"){
+      window.location.href = "admin.html";
+    } else {
+      window.location.href = "index.html";
+    }
+  } else {
+    alert("Credenciales incorrectas");
+  }
+}
+</script>
+
+</body>
+</html>

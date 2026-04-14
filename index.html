@@ -1,34 +1,119 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Asistir24</title>
-  <link rel="stylesheet" href="styles.css"> 
+<meta charset="UTF-8">
+<title>Asistir24</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="styles.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d47a1">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 </head>
 
 <body>
 
-<h2>Login</h2>
+<header class="header">
+  <img src="logo.png" class="logo">
+  <h1>Asistir24</h1>
+</header>
 
-<input type="text" id="user" placeholder="Usuario">
-<input type="password" id="pass" placeholder="Contraseña">
+<div class="banner">
+  <img src="banner.jpg">
+</div>
 
-<button onclick="login()">Ingresar</button>
+<div class="container">
+
+<button class="btn-emergency" onclick="emergencia()">🚨 EMERGENCIA</button>
+
+<button class="btn-primary" onclick="location.href='login.html'">
+Iniciar sesión
+</button>
+
+<div class="card">
+<h2>Tu vehículo</h2>
+<input id="patente" placeholder="Patente">
+<input id="modelo" placeholder="Modelo">
+<input id="color" placeholder="Color">
+<button class="btn-secondary" onclick="guardar()">Guardar</button>
+</div>
+
+<div id="map"></div>
+
+</div>
 
 <script>
-nwindow.location.href = "login.html";
+const API = "https://asistir24plataforma-production.up.railway.app";
 
-function login() {
-  const user = document.getElementById("user").value;
-  const pass = document.getElementById("pass").value;
+// guardar vehículo
+function guardar(){
+  const data = {
+    patente: patente.value,
+    modelo: modelo.value,
+    color: color.value
+  };
+  localStorage.setItem("vehiculo", JSON.stringify(data));
+  alert("Vehículo guardado");
+}
 
-  if (user === "admin" && pass === "1234") {
-    window.location.href = "admin.html";
-  } else {
-    alert("Datos incorrectos");
+// cargar datos guardados
+window.onload = () => {
+  const v = JSON.parse(localStorage.getItem("vehiculo"));
+  if(v){
+    patente.value = v.patente || "";
+    modelo.value = v.modelo || "";
+    color.value = v.color || "";
   }
+};
+
+// mapa
+const map = L.map('map').setView([-34.60, -58.38], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let marker;
+
+// emergencia real
+async function emergencia(){
+
+  const v = JSON.parse(localStorage.getItem("vehiculo")) || {};
+
+  if(!v.patente){
+    alert("Cargá el vehículo primero");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async pos => {
+
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+
+    if(marker) map.removeLayer(marker);
+    marker = L.marker([lat, lon]).addTo(map);
+
+    const ubicacion = `https://www.google.com/maps?q=${lat},${lon}`;
+
+    await fetch(API + "/emergencia", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        patente: v.patente,
+        modelo: v.modelo,
+        color: v.color,
+        ubicacion
+      })
+    });
+
+    window.open(`https://wa.me/5491123456789?text=Emergencia enviada`);
+
+  });
+}
+
+// service worker
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
 }
 </script>
-<!-- update -->
+
 </body>
 </html>
