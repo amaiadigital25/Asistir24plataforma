@@ -5,13 +5,14 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
 app.use(express.json());
-app.use(cors());
+app.use(cors({ origin: "*" }));
 
-const PORT = process.env.PORT || 3030;
+const PORT = process.env.PORT || 3000;
 const SECRET = "asistir24-secret";
 
 // 🗄️ Base de datos temporal
 let users = [];
+let emergencias = [];
 
 // ===============================
 // 🔐 Middleware
@@ -33,121 +34,80 @@ function auth(req, res, next) {
 }
 
 // ===============================
-// 🧪 TEST ROOT (IMPORTANTE PARA RAILWAY)
+// 🧪 ROOT
 // ===============================
 app.get("/", (req, res) => {
   res.send("API Asistir24 funcionando 🚀");
 });
 
 // ===============================
-// 📝 REGISTER
+// 👤 ADMIN POR DEFECTO
 // ===============================
-app.post("/api/register", async (req, res) => {
-  const { user, password, role } = req.body;
-
-  if (!user || !password) {
-    return res.status(400).json({ error: "Faltan datos" });
-  }
-
-  const exist = users.find(u => u.user === user);
-  if (exist) {
-    return res.status(400).json({ error: "Usuario ya existe" });
-  }
-
-  const hash = await bcrypt.hash(password, 10);
-
+(async () => {
+  const hash = await bcrypt.hash("1234", 10);
   users.push({
-    id: Date.now(),
-    user,
+    id: 1,
+    user: "admin",
     password: hash,
-    role: role || "user"
+    role: "admin"
   });
-
-  res.json({ success: true });
-});
+})();
 
 // ===============================
-// 🔐 LOGIN
+// 🔐 LOGIN (COMPATIBLE CON FRONTEND)
 // ===============================
-app.post("/api/login", async (req, res) => {
-  const { user, password } = req.body;
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
 
-  const found = users.find(u => u.user === user);
+  const found = users.find(u => u.user === username);
 
   if (!found) {
-    return res.status(401).json({ error: "Usuario no existe" });
+    return res.json({ success: false });
   }
 
   const valid = await bcrypt.compare(password, found.password);
 
   if (!valid) {
-    return res.status(401).json({ error: "Contraseña incorrecta" });
+    return res.json({ success: false });
   }
 
   const token = jwt.sign(
     { id: found.id, role: found.role },
-    SECRET,
-    { expiresIn: "2h" }
+    SECRET
   );
 
   res.json({
+    success: true,
     token,
     role: found.role
   });
 });
 
 // ===============================
-// 👥 USERS CRUD (PROTEGIDO)
+// 🚨 GUARDAR EMERGENCIA
 // ===============================
+app.post("/emergencia", (req, res) => {
+  const { patente, modelo, color, ubicacion } = req.body;
 
-// Obtener usuarios
-app.get("/api/users", auth, (req, res) => {
-  res.json(users.map(u => ({
-    id: u.id,
-    user: u.user,
-    role: u.role
-  })));
-});
-
-// Crear usuario
-app.post("/api/users", auth, async (req, res) => {
-  const { user, password, role } = req.body;
-
-  if (!user || !password) {
-    return res.status(400).json({ error: "Faltan datos" });
-  }
-
-  const hash = await bcrypt.hash(password, 10);
-
-  users.push({
+  const nueva = {
     id: Date.now(),
-    user,
-    password: hash,
-    role: role || "user"
-  });
+    patente,
+    modelo,
+    color,
+    ubicacion,
+    fecha: new Date()
+  };
 
-  res.json({ success: true });
+  emergencias.unshift(nueva);
+
+  res.json({ ok: true });
 });
 
-// Editar usuario
-app.put("/api/users/:id", auth, (req, res) => {
-  const id = parseInt(req.params.id);
-  const { user } = req.body;
-
-  users = users.map(u =>
-    u.id === id ? { ...u, user } : u
-  );
-
-  res.json({ success: true });
-});
-
-// Eliminar usuario
-app.delete("/api/users/:id", auth, (req, res) => {
-  const id = parseInt(req.params.id);
-
-  users = users.filter(u => u.id !== id);
-
-  res.json({ success: true });
+// ===============================
+// 📡 VER EMERGENCIAS
+// ===============================
+app.get("/emergencias", (req, res) => {
+  res.json(emergencias);
 });
 
 // ===============================
