@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Asistir24 - Acceso privado</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="login-page">
+  <main class="login-shell">
+    <section class="login-panel">
+      <div class="brand-mark">A24</div>
+      <p class="eyebrow">PLATAFORMA CERRADA - PRUEBA</p>
+      <h1>Asistir24</h1>
+      <p class="muted">Acceso exclusivo para operadores autorizados.</p>
+      <form id="loginForm" class="stack">
+        <label>Usuario
+          <input id="username" autocomplete="username" required placeholder="Usuario">
+        </label>
+        <label>Contraseña
+          <input id="password" type="password" autocomplete="current-password" required placeholder="Contraseña">
+        </label>
+        <button class="btn primary" type="submit">Ingresar</button>
+        <p id="message" class="message" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+<script>
+const existing = localStorage.getItem("a24_token");
+if (existing) location.href = "/app.html";
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const message = document.getElementById("message");
+  message.textContent = "Validando...";
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        username: document.getElementById("username").value.trim(),
+        password: document.getElementById("password").value
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || "No se pudo iniciar sesion");
+    localStorage.setItem("a24_token", data.token);
+    location.href = "/app.html";
+  } catch (err) {
+    message.textContent = err.message;
+  }
+});
+</script>
+</body>
+</html>
