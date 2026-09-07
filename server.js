@@ -21,28 +21,44 @@ const FALLBACK_SALT = "939d696df209329913ecaa38ae8b0ca2";
 const FALLBACK_HASH = "e260eb5c451c4702ca7b611408f2aff4125c08384d012ce6f158a0c513f3f9f766270bbd9e26723ed59bb3251a5f6f247b93a6b79226eb0d6924cf3ca2e46939";
 const TARIFA = Object.freeze({ movida: 43989, km: 1199, moneda: "ARS" });
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "database.json");
+const FACTURACION_ESTADOS = ["PENDIENTE", "LISTO_PARA_FACTURAR", "FACTURADO", "COBRADO"];
 
-let cotizaciones = [];
-let emergencias = [];
-
-function readUsers() {
+function readData() {
   try {
     const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-    return Array.isArray(data.users) ? data.users : [];
+    return data && typeof data === "object" ? data : {};
   } catch (error) {
-    console.error("[Asistir24] No se pudo leer la base de usuarios:", error.message);
-    return [];
+    if (error.code !== "ENOENT") console.error("[Asistir24] No se pudo leer la base:", error.message);
+    return {};
   }
 }
 
-function writeUsers(users) {
-  let data = {};
-  try { data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8")); } catch {}
-  data.users = users;
+function writeData(data) {
   const temp = DATA_FILE + ".tmp";
   fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
   fs.writeFileSync(temp, JSON.stringify(data, null, 2));
   fs.renameSync(temp, DATA_FILE);
+}
+
+function saveCollection(key, items) {
+  const data = readData();
+  data[key] = items;
+  writeData(data);
+}
+
+const initialData = readData();
+let cotizaciones = Array.isArray(initialData.cotizaciones) ? initialData.cotizaciones : [];
+let emergencias = Array.isArray(initialData.emergencias) ? initialData.emergencias : [];
+
+function readUsers() {
+  const data = readData();
+  return Array.isArray(data.users) ? data.users : [];
+}
+
+function writeUsers(users) {
+  const data = readData();
+  data.users = users;
+  writeData(data);
 }
 
 function publicUser(user) {
@@ -91,8 +107,27 @@ function asKm(value) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+function ensureFacturacion(cotizacion) {
+  if (!cotizacion.facturacion || typeof cotizacion.facturacion !== "object") {
+    cotizacion.facturacion = {
+      estado: "PENDIENTE",
+      facturaNumero: "",
+      fechaFactura: null,
+      cae: "",
+      caeVencimiento: null,
+      observaciones: "",
+      updatedAt: null,
+      updatedBy: null
+    };
+  }
+  if (!FACTURACION_ESTADOS.includes(cotizacion.facturacion.estado)) cotizacion.facturacion.estado = "PENDIENTE";
+  return cotizacion.facturacion;
+}
+
+cotizaciones.forEach(ensureFacturacion);
+
 app.get("/health", (req, res) => {
-  res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: basesDoc.bases.length, version: "prueba-1" });
+  res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: basesDoc.bases.length, version: "facturacion-1" });
 });
 
 app.post(["/login", "/api/login"], (req, res) => {
@@ -223,6 +258,14 @@ app.get("/api/bases", auth, (req, res) => {
 
 app.get("/api/resumen", auth, (req, res) => {
   const count = key => basesDoc.bases.filter(b => b.modalidad === key).length;
+  const billing = { pendiente: 0, listo: 0, facturado: 0, cobrado: 0 };
+  cotizaciones.forEach(item => {
+    const estado = ensureFacturacion(item).estado;
+    if (estado === "PENDIENTE") billing.pendiente += 1;
+    if (estado === "LISTO_PARA_FACTURAR") billing.listo += 1;
+    if (estado === "FACTURADO") billing.facturado += 1;
+    if (estado === "COBRADO") billing.cobrado += 1;
+  });
   res.json({
     bases: {
       total: basesDoc.bases.length,
@@ -232,14 +275,22 @@ app.get("/api/resumen", auth, (req, res) => {
       pendientes: basesDoc.bases.filter(b => b.estado === "PENDIENTE").length
     },
     cotizaciones: cotizaciones.length,
+    facturacion: billing,
     tarifa: TARIFA
   });
 });
 
 app.post("/api/cotizar", auth, (req, res) => {
-  const { baseId, tipoServicio, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase } = req.body || {};
+  const { baseId, tipoServicio, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente } = req.body || {};
   const base = basesDoc.bases.find(b => b.id === baseId);
   if (!base) return res.status(400).json({ error: "Base invalida" });
+
+  const empresaTexto = String(empresa || "").trim();
+  const servicioTexto = String(numeroServicio || "").trim();
+  const patenteTexto = String(patente || "").trim().toUpperCase();
+  if (!empresaTexto) return res.status(400).json({ error: "Ingrese la empresa o cliente" });
+  if (!servicioTexto) return res.status(400).json({ error: "Ingrese el numero de servicio" });
+  if (!patenteTexto) return res.status(400).json({ error: "Ingrese la patente" });
 
   const esAuxilioMecanico = String(tipoServicio || "").toLowerCase().replace(/á/g, "a") === "auxilio mecanico";
   const k1 = asKm(kmBaseOrigen), k2 = esAuxilioMecanico ? 0 : asKm(kmOrigenDestino), k3 = esAuxilioMecanico ? 0 : asKm(kmDestinoBase);
@@ -252,22 +303,84 @@ app.post("/api/cotizar", auth, (req, res) => {
 
   const cotizacion = {
     id: "COT-" + Date.now(), fecha: new Date().toISOString(), operador: req.user.user,
+    empresa: empresaTexto, numeroServicio: servicioTexto, patente: patenteTexto,
     base: { id: base.id, prestador: base.prestador, base: base.base, zona: base.zona, modalidad: base.modalidad },
     tipoServicio: tipoServicio || "Semipesado", origen: String(origen || "").trim(), destino: esAuxilioMecanico ? "" : String(destino || "").trim(),
     tramos: { baseOrigen: k1, origenDestino: k2, destinoBase: !esAuxilioMecanico && base.modalidad === "INTERIOR" ? k3 : 0 },
-    kmTotal, tarifa: TARIFA, subtotalKm, total
+    kmTotal, tarifa: TARIFA, subtotalKm, total,
+    facturacion: {
+      estado: "PENDIENTE",
+      facturaNumero: "",
+      fechaFactura: null,
+      cae: "",
+      caeVencimiento: null,
+      observaciones: "",
+      updatedAt: null,
+      updatedBy: null
+    }
   };
   cotizaciones.unshift(cotizacion);
-  cotizaciones = cotizaciones.slice(0, 500);
+  cotizaciones = cotizaciones.slice(0, 5000);
+  saveCollection("cotizaciones", cotizaciones);
   res.json(cotizacion);
 });
 
-app.get("/api/cotizaciones", auth, (req, res) => res.json({ total: cotizaciones.length, items: cotizaciones }));
+app.get("/api/cotizaciones", auth, (req, res) => {
+  cotizaciones.forEach(ensureFacturacion);
+  res.json({ total: cotizaciones.length, items: cotizaciones });
+});
+
+app.get("/api/facturacion", auth, adminOnly, (req, res) => {
+  const estado = String(req.query.estado || "").trim();
+  const term = String(req.query.q || "").trim().toLowerCase();
+  let items = cotizaciones.map(item => {
+    ensureFacturacion(item);
+    return item;
+  });
+  if (FACTURACION_ESTADOS.includes(estado)) items = items.filter(item => item.facturacion.estado === estado);
+  if (term) {
+    items = items.filter(item => [item.id, item.empresa, item.numeroServicio, item.patente, item.base?.base, item.base?.prestador, item.facturacion?.facturaNumero].join(" ").toLowerCase().includes(term));
+  }
+  const resumen = FACTURACION_ESTADOS.reduce((acc, key) => {
+    acc[key] = cotizaciones.filter(item => ensureFacturacion(item).estado === key).length;
+    return acc;
+  }, {});
+  const importes = {
+    pendiente: cotizaciones.filter(item => ["PENDIENTE", "LISTO_PARA_FACTURAR"].includes(ensureFacturacion(item).estado)).reduce((sum, item) => sum + Number(item.total || 0), 0),
+    facturado: cotizaciones.filter(item => ["FACTURADO", "COBRADO"].includes(ensureFacturacion(item).estado)).reduce((sum, item) => sum + Number(item.total || 0), 0)
+  };
+  res.json({ total: items.length, items, resumen, importes });
+});
+
+app.patch("/api/cotizaciones/:id/facturacion", auth, adminOnly, (req, res) => {
+  const cotizacion = cotizaciones.find(item => item.id === req.params.id);
+  if (!cotizacion) return res.status(404).json({ error: "Cotizacion no encontrada" });
+  const facturacion = ensureFacturacion(cotizacion);
+  const estado = req.body?.estado !== undefined ? String(req.body.estado) : facturacion.estado;
+  if (!FACTURACION_ESTADOS.includes(estado)) return res.status(400).json({ error: "Estado de facturacion invalido" });
+
+  const facturaNumero = req.body?.facturaNumero !== undefined ? String(req.body.facturaNumero).trim() : facturacion.facturaNumero;
+  if (["FACTURADO", "COBRADO"].includes(estado) && !facturaNumero) return res.status(400).json({ error: "Ingrese el numero de factura antes de marcar como facturado" });
+
+  facturacion.estado = estado;
+  facturacion.facturaNumero = facturaNumero;
+  if (req.body?.fechaFactura !== undefined) facturacion.fechaFactura = req.body.fechaFactura || null;
+  if (estado === "FACTURADO" && !facturacion.fechaFactura) facturacion.fechaFactura = new Date().toISOString();
+  if (req.body?.cae !== undefined) facturacion.cae = String(req.body.cae || "").trim();
+  if (req.body?.caeVencimiento !== undefined) facturacion.caeVencimiento = req.body.caeVencimiento || null;
+  if (req.body?.observaciones !== undefined) facturacion.observaciones = String(req.body.observaciones || "").trim();
+  facturacion.updatedAt = new Date().toISOString();
+  facturacion.updatedBy = req.user.user;
+
+  saveCollection("cotizaciones", cotizaciones);
+  res.json({ success: true, cotizacion });
+});
 
 app.post(["/emergencia", "/api/emergencia"], auth, (req, res) => {
   const { patente, modelo, color, ubicacion } = req.body || {};
   const nueva = { id: "EM-" + Date.now(), fecha: new Date().toISOString(), patente: String(patente || ""), modelo: String(modelo || ""), color: String(color || ""), ubicacion: String(ubicacion || "") };
   emergencias.unshift(nueva); emergencias = emergencias.slice(0, 500);
+  saveCollection("emergencias", emergencias);
   res.json({ ok: true, emergencia: nueva });
 });
 app.get(["/emergencias", "/api/emergencias"], auth, (req, res) => res.json({ total: emergencias.length, items: emergencias }));
@@ -275,6 +388,7 @@ app.get(["/emergencias", "/api/emergencias"], auth, (req, res) => res.json({ tot
 app.use(express.static(path.join(__dirname, "public"), { index: false, maxAge: "5m" }));
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
 app.get("/admin", (req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
+app.get("/facturacion", (req, res) => res.sendFile(path.join(__dirname, "public", "facturacion.html")));
 app.get("*", (req, res) => res.status(404).json({ error: "Ruta no encontrada" }));
 
 app.listen(PORT, () => console.log("Asistir24 Plataforma Cerrada activa en puerto " + PORT));
