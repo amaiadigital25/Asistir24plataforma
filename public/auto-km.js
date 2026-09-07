@@ -7,7 +7,25 @@
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
   function normalizeText(value) {
-    return String(value || "").trim();
+    return String(value || "")
+      .replace(/\u00a0/g, " ")
+      .replace(/^[\s>›»•·\-–—:;|]+/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function normalizeAddress(value) {
+    const text = normalizeText(value).replace(/[;,\s]+$/, "");
+    if (!text) return "";
+    return /\bargentina\b/i.test(text) ? text : `${text}, Argentina`;
+  }
+
+  function geocodeVariants(address) {
+    const primary = normalizeAddress(address);
+    const expanded = primary
+      .replace(/\bAv\.?\s+/gi, "Avenida ")
+      .replace(/\bGral\.?\s+/gi, "General ");
+    return [...new Set([primary, expanded].filter(Boolean))];
   }
 
   function baseAddress(base) {
@@ -28,28 +46,40 @@
   }
 
   async function geocode(address) {
-    const key = normalizeText(address).toLowerCase();
-    if (geocodeCache.has(key)) return geocodeCache.get(key);
+    const variants = geocodeVariants(address);
+    const cacheKey = variants[0]?.toLowerCase();
+    if (cacheKey && geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey);
 
-    const wait = Math.max(0, 1100 - (Date.now() - lastGeocodeAt));
-    if (wait) await sleep(wait);
-    lastGeocodeAt = Date.now();
+    let lastQuery = variants[0] || normalizeText(address);
 
-    const url = new URL("https://nominatim.openstreetmap.org/search");
-    url.searchParams.set("q", address);
-    url.searchParams.set("format", "jsonv2");
-    url.searchParams.set("limit", "1");
-    url.searchParams.set("countrycodes", "ar");
-    const response = await fetch(url, { headers: { "Accept": "application/json", "Accept-Language": "es-AR,es;q=0.9" } });
-    if (!response.ok) throw new Error("No se pudo consultar el mapa");
-    const items = await response.json();
-    const item = items?.[0];
-    if (!item) throw new Error(`No se pudo localizar: ${address}`);
+    for (const query of variants) {
+      lastQuery = query;
+      const key = query.toLowerCase();
+      if (geocodeCache.has(key)) return geocodeCache.get(key);
 
-    const point = { lat: Number(item.lat), lon: Number(item.lon), label: item.display_name || address };
-    if (!Number.isFinite(point.lat) || !Number.isFinite(point.lon)) throw new Error(`Ubicación inválida: ${address}`);
-    geocodeCache.set(key, point);
-    return point;
+      const wait = Math.max(0, 1100 - (Date.now() - lastGeocodeAt));
+      if (wait) await sleep(wait);
+      lastGeocodeAt = Date.now();
+
+      const url = new URL("https://nominatim.openstreetmap.org/search");
+      url.searchParams.set("q", query);
+      url.searchParams.set("format", "jsonv2");
+      url.searchParams.set("limit", "1");
+      url.searchParams.set("countrycodes", "ar");
+      const response = await fetch(url, { headers: { "Accept": "application/json", "Accept-Language": "es-AR,es;q=0.9" } });
+      if (!response.ok) throw new Error("No se pudo consultar el mapa");
+      const items = await response.json();
+      const item = items?.[0];
+      if (!item) continue;
+
+      const point = { lat: Number(item.lat), lon: Number(item.lon), label: item.display_name || query };
+      if (!Number.isFinite(point.lat) || !Number.isFinite(point.lon)) continue;
+      geocodeCache.set(key, point);
+      if (cacheKey) geocodeCache.set(cacheKey, point);
+      return point;
+    }
+
+    throw new Error(`No se pudo localizar: ${lastQuery}`);
   }
 
   async function routeKm(from, to) {
@@ -79,6 +109,9 @@
     const auxilio = isAuxilioMecanico($("tipoServicio").value);
     const destino = auxilio ? "" : normalizeText($("destino").value);
 
+    if (origen) $("origen").value = origen;
+    if (destino) $("destino").value = destino;
+
     if (!base || !origen) {
       if (!silent) setKmStatus("Ingrese la base y el origen para calcular los kilómetros.");
       return false;
@@ -95,7 +128,7 @@
 
     try {
       const baseCoord = await geocode(baseAddress(base));
-      const origenCoord = await geocode(`${origen}, Argentina`);
+      const origenCoord = await geocode(origen);
       if (requestId !== autoRequestId) return false;
 
       const k1 = await routeKm(baseCoord, origenCoord);
@@ -110,7 +143,7 @@
       let k2 = 0;
       let k3 = 0;
       if (!auxilio) {
-        const destinoCoord = await geocode(`${destino}, Argentina`);
+        const destinoCoord = await geocode(destino);
         if (requestId !== autoRequestId) return false;
         k2 = await routeKm(origenCoord, destinoCoord);
         setAutoValue($("kmOrigenDestino"), k2);
