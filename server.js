@@ -155,8 +155,58 @@ app.get("/api/config", auth, (req, res) => {
     tarifa: TARIFA,
     reglas: { AMBA_CABA: "Base -> Origen -> Destino", INTERIOR: "Base -> Origen -> Destino -> Base", AUXILIO_MECANICO: "Base -> Origen" },
     tiposServicio: ["Liviano", "Auxilio mecanico", "Semipesado"],
-    notaDistancias: "En esta prueba los kilometros se cargan manualmente. El PDF informa bases/localidades, pero no direcciones exactas ni coordenadas para calcular rutas automaticamente."
+    notaDistancias: "Los kilómetros Base-Origen se calculan automáticamente con Google Maps a partir de la base y la ubicación ingresada."
   });
+});
+
+async function geocodeGoogle(address) {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) throw new Error("Google Maps todavía no está configurado en el servidor");
+  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+  url.searchParams.set("address", address);
+  url.searchParams.set("region", "ar");
+  url.searchParams.set("key", key);
+  const response = await fetch(url);
+  const data = await response.json();
+  if (!response.ok || data.status !== "OK" || !data.results?.[0]) throw new Error("No se pudo localizar: " + address);
+  return data.results[0].geometry.location;
+}
+
+async function routeKmGoogle(origin, destination) {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask": "routes.distanceMeters"
+    },
+    body: JSON.stringify({
+      origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
+      destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
+      travelMode: "DRIVE",
+      routingPreference: "TRAFFIC_UNAWARE"
+    })
+  });
+  const data = await response.json();
+  const meters = data.routes?.[0]?.distanceMeters;
+  if (!response.ok || !Number.isFinite(meters)) throw new Error(data.error?.message || "Google Maps no pudo calcular el recorrido");
+  return Math.round((meters / 1000) * 10) / 10;
+}
+
+app.post("/api/distancia", auth, async (req, res) => {
+  try {
+    const base = basesDoc.bases.find(item => item.id === req.body?.baseId);
+    const origenTexto = String(req.body?.origen || "").trim();
+    if (!base) return res.status(400).json({ error: "Base inválida" });
+    if (!origenTexto) return res.status(400).json({ error: "Ingrese la ubicación de origen" });
+    const baseTexto = [base.base, base.zona, "Argentina"].filter(Boolean).join(", ");
+    const [baseCoord, origenCoord] = await Promise.all([geocodeGoogle(baseTexto), geocodeGoogle(origenTexto + ", Argentina")]);
+    const km = await routeKmGoogle(baseCoord, origenCoord);
+    res.json({ km, desde: baseTexto, hasta: origenTexto });
+  } catch (error) {
+    res.status(503).json({ error: error.message || "No se pudo calcular la distancia" });
+  }
 });
 
 app.get("/api/bases", auth, (req, res) => {
