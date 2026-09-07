@@ -34,6 +34,15 @@ function routeLabel(modalidad, tipoServicio) {
   return modalidad === "INTERIOR" ? "Base -> Origen -> Destino -> Base" : "Base -> Origen -> Destino";
 }
 
+function billingLabel(estado) {
+  return ({
+    PENDIENTE: "Pendiente",
+    LISTO_PARA_FACTURAR: "Listo para facturar",
+    FACTURADO: "Facturado",
+    COBRADO: "Cobrado"
+  })[estado] || "Pendiente";
+}
+
 function selectedBase() {
   return bases.find(b => b.id === $("baseId").value);
 }
@@ -131,7 +140,10 @@ function renderBases() {
 async function loadHeader() {
   const me = await api("/api/me");
   $("who").textContent = me.user;
-  if (me.role === "admin") $("adminLink").classList.remove("hidden");
+  if (me.role === "admin") {
+    $("adminLink").classList.remove("hidden");
+    $("billingLink").classList.remove("hidden");
+  }
 }
 
 async function loadConfig() {
@@ -154,7 +166,7 @@ async function loadStats() {
 
 async function loadQuotes() {
   const data = await api("/api/cotizaciones");
-  $("quoteRows").innerHTML = data.items.map(q => `<tr><td>${dateTime(q.fecha)}</td><td>${q.id}</td><td>${q.base.base} - ${q.base.prestador}</td><td>${routeLabel(q.base.modalidad, q.tipoServicio)}</td><td>${q.kmTotal.toFixed(1)}</td><td><strong>${ars(q.total)}</strong></td></tr>`).join("") || `<tr><td colspan="6" class="muted">Todavia no hay cotizaciones.</td></tr>`;
+  $("quoteRows").innerHTML = data.items.map(q => `<tr><td>${dateTime(q.fecha)}</td><td>${q.id}</td><td>${q.empresa || "-"}</td><td>${q.numeroServicio || "-"}</td><td>${q.patente || "-"}</td><td>${q.base.base} - ${q.base.prestador}</td><td>${Number(q.kmTotal || 0).toFixed(1)}</td><td><strong>${ars(q.total)}</strong></td><td>${billingLabel(q.facturacion?.estado)}</td></tr>`).join("") || `<tr><td colspan="9" class="muted">Todavía no hay cotizaciones.</td></tr>`;
 }
 
 $("baseId").addEventListener("change", async () => {
@@ -165,7 +177,7 @@ $("baseId").addEventListener("change", async () => {
 $("tipoServicio").addEventListener("change", updateRouteUI);
 $("origen").addEventListener("input", () => {
   invalidateGoogleKm();
-  setKmStatus("Origen modificado. Google Maps recalculara el tramo.");
+  setKmStatus("Origen modificado. Google Maps recalculará el tramo.");
 });
 $("origen").addEventListener("blur", () => calculateBaseOriginKm({silent:true}));
 $("calcKmButton").addEventListener("click", () => calculateBaseOriginKm());
@@ -194,6 +206,9 @@ $("quoteForm").addEventListener("submit", async e => {
     if (!kmInput.value) throw new Error("Google Maps no pudo calcular Base -> Origen. Ingrese los kilómetros manualmente para continuar.");
 
     const payload = {
+      empresa: $("empresa").value.trim(),
+      numeroServicio: $("numeroServicio").value.trim(),
+      patente: $("patente").value.trim().toUpperCase(),
       baseId: currentBase,
       tipoServicio: $("tipoServicio").value,
       origen,
@@ -207,7 +222,7 @@ $("quoteForm").addEventListener("submit", async e => {
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify(payload)
     });
-    result.innerHTML = `<div class="result-grid"><div><span>ID</span><strong>${q.id}</strong></div><div><span>Circuito</span><strong>${routeLabel(q.base.modalidad, q.tipoServicio)}</strong></div><div><span>Km totales</span><strong>${q.kmTotal.toFixed(1)} km</strong></div><div><span>Movida</span><strong>${ars(q.tarifa.movida)}</strong></div><div><span>Kilometros</span><strong>${ars(q.subtotalKm)}</strong></div><div class="total"><span>Total</span><strong>${ars(q.total)}</strong></div></div>`;
+    result.innerHTML = `<div class="result-grid"><div><span>Servicio</span><strong>${q.numeroServicio}</strong></div><div><span>Empresa</span><strong>${q.empresa}</strong></div><div><span>Patente</span><strong>${q.patente}</strong></div><div><span>Km totales</span><strong>${q.kmTotal.toFixed(1)} km</strong></div><div><span>Movida</span><strong>${ars(q.tarifa.movida)}</strong></div><div><span>Kilómetros</span><strong>${ars(q.subtotalKm)}</strong></div><div class="total"><span>Total</span><strong>${ars(q.total)}</strong></div><div><span>Facturación</span><strong>Pendiente</strong></div><div><span>ID</span><strong>${q.id}</strong></div></div>`;
     await Promise.all([loadStats(), loadQuotes()]);
   } catch (err) {
     result.innerHTML = `<span class="error">${err.message}</span>`;
