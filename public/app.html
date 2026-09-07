@@ -21,9 +21,13 @@
         <label class="span-2">Base<select id="baseId" required></select></label>
         <label>Tipo de servicio<select id="tipoServicio"><option>Liviano</option><option>Auxilio mecanico</option><option selected>Semipesado</option></select></label>
         <label>Modalidad<input id="modalidad" disabled></label>
-        <label>Origen<input id="origen" placeholder="Ej.: Av. Rivadavia 9000"></label>
+        <label>Origen<input id="origen" placeholder="Ej.: Av. Rivadavia 9000, CABA"></label>
         <label id="destinationWrap">Destino<input id="destino" placeholder="Ej.: Taller / domicilio"></label>
-        <label>Km Base -> Origen<input id="kmBaseOrigen" type="number" step="0.1" min="0" required placeholder="Ingresar kilómetros"></label>
+        <label>Km Base -> Origen
+          <input id="kmBaseOrigen" type="number" step="0.1" min="0" required placeholder="Se calcula con Google Maps">
+          <button class="btn ghost small" id="calcKmButton" type="button">Calcular con Google Maps</button>
+          <span id="kmStatus" class="muted">Ingrese el origen para calcular el recorrido.</span>
+        </label>
         <label id="kmOriginDestinationWrap">Km Origen -> Destino<input id="kmOrigenDestino" type="number" step="0.1" min="0" required></label>
         <label id="returnWrap">Km Destino -> Base<input id="kmDestinoBase" type="number" step="0.1" min="0"></label>
         <div class="span-2"><button class="btn primary" type="submit">Calcular y guardar cotizacion</button></div>
@@ -40,7 +44,7 @@
     <div class="section-head"><div><p class="eyebrow">HISTORIAL</p><h2>Cotizaciones de esta prueba</h2></div><button class="btn ghost small" id="refreshQuotes">Actualizar</button></div>
     <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>ID</th><th>Base</th><th>Circuito</th><th>Km</th><th>Total</th></tr></thead><tbody id="quoteRows"></tbody></table></div>
   </section>
-  <section class="card compact"><p class="notice">Prueba operativa: los kilometros se cargan manualmente porque el PDF de la red informa localidades/bases, pero no direcciones exactas ni coordenadas de cada base. La logica tarifaria aplica automaticamente el regreso a base para Interior y no lo suma en CABA/AMBA.</p></section>
+  <section class="card compact"><p class="notice">Google Maps calcula automaticamente el tramo Base -> Origen cuando el servicio y la clave del servidor estan disponibles. Si Google Maps no responde, el operador puede cargar los kilometros manualmente para no detener la operacion. Los demas tramos permanecen manuales en esta etapa.</p></section>
 </main>
 <script src="/app.js"></script>
 </body>
