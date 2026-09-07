@@ -20,17 +20,30 @@ function ars(value) {
 function dateTime(iso) {
   return new Intl.DateTimeFormat("es-AR", {dateStyle:"short", timeStyle:"short"}).format(new Date(iso));
 }
-function routeLabel(modalidad) {
+function isAuxilioMecanico(tipoServicio) {
+  return String(tipoServicio || "").toLowerCase().replace(/á/g, "a") === "auxilio mecanico";
+}
+function routeLabel(modalidad, tipoServicio) {
+  if (isAuxilioMecanico(tipoServicio)) return "Base -> Origen";
   return modalidad === "INTERIOR" ? "Base -> Origen -> Destino -> Base" : "Base -> Origen -> Destino";
 }
 function selectedBase() { return bases.find(b => b.id === $("baseId").value); }
 function updateRouteUI() {
   const base = selectedBase(); if (!base) return;
   $("modalidad").value = base.modalidad === "INTERIOR" ? "Interior" : "CABA / AMBA";
-  $("routeRule").textContent = routeLabel(base.modalidad);
-  $("returnWrap").style.display = base.modalidad === "INTERIOR" ? "block" : "none";
-  $("kmDestinoBase").required = base.modalidad === "INTERIOR";
-  if (base.modalidad !== "INTERIOR") $("kmDestinoBase").value = "";
+  const auxilio = isAuxilioMecanico($("tipoServicio").value);
+  $("routeRule").textContent = routeLabel(base.modalidad, $("tipoServicio").value);
+  $("destinationWrap").style.display = auxilio ? "none" : "grid";
+  $("kmOriginDestinationWrap").style.display = auxilio ? "none" : "grid";
+  $("destino").required = !auxilio;
+  $("kmOrigenDestino").required = !auxilio;
+  $("returnWrap").style.display = !auxilio && base.modalidad === "INTERIOR" ? "grid" : "none";
+  $("kmDestinoBase").required = !auxilio && base.modalidad === "INTERIOR";
+  if (auxilio) {
+    $("destino").value = "";
+    $("kmOrigenDestino").value = "";
+    $("kmDestinoBase").value = "";
+  } else if (base.modalidad !== "INTERIOR") $("kmDestinoBase").value = "";
 }
 function renderBaseSelect() {
   $("baseId").innerHTML = bases.map(b => `<option value="${b.id}">${b.base} - ${b.prestador} (${b.zona})</option>`).join("");
@@ -57,9 +70,10 @@ async function loadStats() {
 }
 async function loadQuotes() {
   const data = await api("/api/cotizaciones");
-  $("quoteRows").innerHTML = data.items.map(q => `<tr><td>${dateTime(q.fecha)}</td><td>${q.id}</td><td>${q.base.base} - ${q.base.prestador}</td><td>${routeLabel(q.base.modalidad)}</td><td>${q.kmTotal.toFixed(1)}</td><td><strong>${ars(q.total)}</strong></td></tr>`).join("") || `<tr><td colspan="6" class="muted">Todavia no hay cotizaciones.</td></tr>`;
+  $("quoteRows").innerHTML = data.items.map(q => `<tr><td>${dateTime(q.fecha)}</td><td>${q.id}</td><td>${q.base.base} - ${q.base.prestador}</td><td>${routeLabel(q.base.modalidad, q.tipoServicio)}</td><td>${q.kmTotal.toFixed(1)}</td><td><strong>${ars(q.total)}</strong></td></tr>`).join("") || `<tr><td colspan="6" class="muted">Todavia no hay cotizaciones.</td></tr>`;
 }
 $("baseId").addEventListener("change", updateRouteUI);
+$("tipoServicio").addEventListener("change", updateRouteUI);
 $("searchBase").addEventListener("input", renderBases);
 $("filterModalidad").addEventListener("change", renderBases);
 $("refreshQuotes").addEventListener("click", loadQuotes);
@@ -70,7 +84,7 @@ $("quoteForm").addEventListener("submit", async e => {
   try {
     const payload = {baseId:$("baseId").value,tipoServicio:$("tipoServicio").value,origen:$("origen").value,destino:$("destino").value,kmBaseOrigen:$("kmBaseOrigen").value,kmOrigenDestino:$("kmOrigenDestino").value,kmDestinoBase:$("kmDestinoBase").value};
     const q = await api("/api/cotizar", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
-    result.innerHTML = `<div class="result-grid"><div><span>ID</span><strong>${q.id}</strong></div><div><span>Circuito</span><strong>${routeLabel(q.base.modalidad)}</strong></div><div><span>Km totales</span><strong>${q.kmTotal.toFixed(1)} km</strong></div><div><span>Movida</span><strong>${ars(q.tarifa.movida)}</strong></div><div><span>Kilometros</span><strong>${ars(q.subtotalKm)}</strong></div><div class="total"><span>Total</span><strong>${ars(q.total)}</strong></div></div>`;
+    result.innerHTML = `<div class="result-grid"><div><span>ID</span><strong>${q.id}</strong></div><div><span>Circuito</span><strong>${routeLabel(q.base.modalidad, q.tipoServicio)}</strong></div><div><span>Km totales</span><strong>${q.kmTotal.toFixed(1)} km</strong></div><div><span>Movida</span><strong>${ars(q.tarifa.movida)}</strong></div><div><span>Kilometros</span><strong>${ars(q.subtotalKm)}</strong></div><div class="total"><span>Total</span><strong>${ars(q.total)}</strong></div></div>`;
     await Promise.all([loadStats(), loadQuotes()]);
   } catch (err) { result.innerHTML = `<span class="error">${err.message}</span>`; }
 });
