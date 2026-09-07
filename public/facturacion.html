@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Asistir24 - Facturación</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div><p class="eyebrow">ASISTIR24</p><h1>Control de facturación</h1></div>
+  <div class="top-actions"><a class="btn ghost small" href="/app.html">Panel operativo</a><span id="who" class="pill">Admin</span><button class="btn ghost small" id="logout">Salir</button></div>
+</header>
+<main class="page admin-page">
+  <section class="stats" id="billingStats"></section>
+
+  <section class="card">
+    <div class="section-head">
+      <div><p class="eyebrow">FACTURACIÓN</p><h2>Servicios a facturar</h2></div>
+      <button class="btn ghost small" id="refreshBilling">Actualizar</button>
+    </div>
+    <div class="filters">
+      <input id="searchBilling" placeholder="Buscar empresa, servicio, patente o factura">
+      <select id="billingState">
+        <option value="">Todos</option>
+        <option value="PENDIENTE">Pendiente</option>
+        <option value="LISTO_PARA_FACTURAR">Listo para facturar</option>
+        <option value="FACTURADO">Facturado</option>
+        <option value="COBRADO">Cobrado</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Empresa</th><th>Servicio</th><th>Patente</th><th>Tipo</th><th>Km</th><th>Total</th><th>Estado</th><th>Factura</th><th>Acción</th></tr></thead>
+        <tbody id="billingRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card compact">
+    <p class="notice">Esta pantalla controla el circuito administrativo. La emisión fiscal electrónica ante ARCA se conectará en una segunda etapa; por ahora se registra el número de factura y, si corresponde, CAE y vencimiento.</p>
+  </section>
+</main>
+
+<dialog id="invoiceDialog">
+  <form method="dialog" class="dialog-card" id="invoiceForm">
+    <div><p class="eyebrow">REGISTRAR FACTURA</p><h2 id="invoiceTitle">Factura</h2></div>
+    <label>Número de factura<input id="invoiceNumber" required placeholder="Ej.: A 0004-00001234"></label>
+    <label>CAE<input id="invoiceCae" placeholder="Opcional hasta integrar ARCA"></label>
+    <label>Vencimiento CAE<input id="invoiceCaeDue" type="date"></label>
+    <label>Observaciones<input id="invoiceNotes" placeholder="Opcional"></label>
+    <p id="invoiceError" class="message"></p>
+    <div class="dialog-actions"><button class="btn ghost" type="button" id="cancelInvoice">Cancelar</button><button class="btn primary" type="submit">Guardar factura</button></div>
+  </form>
+</dialog>
+
+<script src="/facturacion.js"></script>
+</body>
+</html>
