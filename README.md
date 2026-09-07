@@ -4,6 +4,7 @@ Prototipo operativo privado para probar el cotizador y la red de prestadores.
 
 ## Incluye
 - Login con JWT y expiracion de 8 horas.
+- Panel de administracion para altas, bajas, bloqueo, roles y cambio de contraseña de usuarios.
 - 57 bases cargadas desde `RED DE PRESTADORES.pdf`.
 - Cotizador con movida ARS 43.989 y ARS 1.199 por kilometro.
 - CABA/AMBA: Base -> Origen -> Destino.
@@ -20,5 +21,6 @@ El PDF informa localidades/bases pero no direcciones exactas ni coordenadas de t
 - `ADMIN_USER`: usuario administrador.
 - `ADMIN_PASSWORD`: contraseña administradora.
 - `APP_ORIGIN`: origen permitido si frontend y backend se separan.
+- `DATA_FILE`: ruta persistente del archivo JSON de usuarios (por ejemplo `/data/database.json` en un volumen de Railway).
 
 Si no se configura `JWT_SECRET`, el servidor genera una clave temporal en cada arranque. Para produccion debe usarse una base de datos persistente para usuarios y cotizaciones.

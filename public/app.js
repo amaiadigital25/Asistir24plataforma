@@ -47,7 +47,7 @@ function renderBases() {
   $("baseCount").textContent = `${filtered.length} bases`;
   $("baseList").innerHTML = filtered.map(b => `<div class="base-row"><div><strong>${b.base}</strong><span>${b.prestador}</span></div><div class="base-meta"><span>${b.zona}</span><span>${b.tipo}</span><span class="status ${b.estado === "ACTIVO" ? "ok" : "warn"}">${b.estado}</span></div></div>`).join("") || `<p class="muted">Sin resultados.</p>`;
 }
-async function loadHeader() { const me = await api("/api/me"); $("who").textContent = me.user; }
+async function loadHeader() { const me = await api("/api/me"); $("who").textContent = me.user; if (me.role === "admin") $("adminLink").classList.remove("hidden"); }
 async function loadConfig() { const config = await api("/api/config"); $("tarifaPill").textContent = `${ars(config.tarifa.movida)} + ${ars(config.tarifa.km)}/km`; }
 async function loadBases() { const data = await api("/api/bases"); bases = data.items; renderBaseSelect(); renderBases(); }
 async function loadStats() {
@@ -63,7 +63,7 @@ $("baseId").addEventListener("change", updateRouteUI);
 $("searchBase").addEventListener("input", renderBases);
 $("filterModalidad").addEventListener("change", renderBases);
 $("refreshQuotes").addEventListener("click", loadQuotes);
-$("logout").addEventListener("click", () => { localStorage.removeItem("a24_token"); location.href = "/"; });
+$("logout").addEventListener("click", () => { localStorage.removeItem("a24_token"); localStorage.removeItem("a24_role"); location.href = "/"; });
 $("quoteForm").addEventListener("submit", async e => {
   e.preventDefault();
   const result = $("quoteResult"); result.classList.remove("hidden"); result.innerHTML = "Calculando...";

@@ -1,11 +1,4 @@
 {
-  "users": [
-    {
-      "id": 1,
-      "username": "admin",
-      "password": "$2a$10$C6U6r.2ixZzTk5pF0hF6UuwEj0uYzSPJvX1PpH7kz7zYlXjF.7pP6",
-      "role": "admin"
-    }
-  ],
+  "users": [],
   "services": []
 }

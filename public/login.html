@@ -44,7 +44,8 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || "No se pudo iniciar sesion");
     localStorage.setItem("a24_token", data.token);
-    location.href = "/app.html";
+    localStorage.setItem("a24_role", data.role);
+    location.href = data.role === "admin" ? "/admin" : "/app.html";
   } catch (err) {
     message.textContent = err.message;
   }
