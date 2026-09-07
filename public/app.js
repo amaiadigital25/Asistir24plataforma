@@ -82,7 +82,11 @@ $("quoteForm").addEventListener("submit", async e => {
   e.preventDefault();
   const result = $("quoteResult"); result.classList.remove("hidden"); result.innerHTML = "Calculando...";
   try {
-    const payload = {baseId:$("baseId").value,tipoServicio:$("tipoServicio").value,origen:$("origen").value,destino:$("destino").value,kmBaseOrigen:$("kmBaseOrigen").value,kmOrigenDestino:$("kmOrigenDestino").value,kmDestinoBase:$("kmDestinoBase").value};
+    if (!$("origen").value.trim()) throw new Error("Ingrese la ubicación de origen");
+    result.innerHTML = "Calculando kilómetros Base → Origen...";
+    const distancia = await api("/api/distancia", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({baseId:$("baseId").value,origen:$("origen").value})});
+    $("kmBaseOrigen").value = distancia.km.toFixed(1);
+    const payload = {baseId:$("baseId").value,tipoServicio:$("tipoServicio").value,origen:$("origen").value,destino:$("destino").value,kmBaseOrigen:distancia.km,kmOrigenDestino:$("kmOrigenDestino").value,kmDestinoBase:$("kmDestinoBase").value};
     const q = await api("/api/cotizar", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     result.innerHTML = `<div class="result-grid"><div><span>ID</span><strong>${q.id}</strong></div><div><span>Circuito</span><strong>${routeLabel(q.base.modalidad, q.tipoServicio)}</strong></div><div><span>Km totales</span><strong>${q.kmTotal.toFixed(1)} km</strong></div><div><span>Movida</span><strong>${ars(q.tarifa.movida)}</strong></div><div><span>Kilometros</span><strong>${ars(q.subtotalKm)}</strong></div><div class="total"><span>Total</span><strong>${ars(q.total)}</strong></div></div>`;
     await Promise.all([loadStats(), loadQuotes()]);
