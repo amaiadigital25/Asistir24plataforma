@@ -27,12 +27,12 @@
         <label>Origen<input id="origen" required placeholder="Ej.: Av. Rivadavia 9000, CABA"></label>
         <label id="destinationWrap">Destino<input id="destino" placeholder="Ej.: Taller / domicilio"></label>
         <label>Km Base -> Origen
-          <input id="kmBaseOrigen" type="number" step="0.1" min="0" required placeholder="Se calcula con Google Maps">
-          <button class="btn ghost small" id="calcKmButton" type="button">Calcular con Google Maps</button>
-          <span id="kmStatus" class="muted">Ingrese el origen para calcular el recorrido.</span>
+          <input id="kmBaseOrigen" type="number" step="0.1" min="0" required placeholder="Se calcula automáticamente">
+          <button class="btn ghost small" id="calcKmButton" type="button">Calcular kilómetros automáticamente</button>
+          <span id="kmStatus" class="muted">Ingrese origen y destino para calcular el recorrido.</span>
         </label>
-        <label id="kmOriginDestinationWrap">Km Origen -> Destino<input id="kmOrigenDestino" type="number" step="0.1" min="0" required></label>
-        <label id="returnWrap">Km Destino -> Base<input id="kmDestinoBase" type="number" step="0.1" min="0"></label>
+        <label id="kmOriginDestinationWrap">Km Origen -> Destino<input id="kmOrigenDestino" type="number" step="0.1" min="0" required placeholder="Se calcula automáticamente"></label>
+        <label id="returnWrap">Km Destino -> Base<input id="kmDestinoBase" type="number" step="0.1" min="0" placeholder="Se calcula automáticamente"></label>
         <div class="span-2"><button class="btn primary" type="submit">Calcular y guardar cotización</button></div>
       </form>
       <div id="quoteResult" class="quote-result hidden"></div>
@@ -47,8 +47,9 @@
     <div class="section-head"><div><p class="eyebrow">HISTORIAL</p><h2>Cotizaciones guardadas</h2></div><button class="btn ghost small" id="refreshQuotes">Actualizar</button></div>
     <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>ID</th><th>Empresa</th><th>Servicio</th><th>Patente</th><th>Base</th><th>Km</th><th>Total</th><th>Facturación</th></tr></thead><tbody id="quoteRows"></tbody></table></div>
   </section>
-  <section class="card compact"><p class="notice">Cada cotización queda guardada con empresa, número de servicio, patente y estado de facturación. Google Maps calcula automáticamente Base -> Origen cuando está disponible; si falla, el operador puede cargar los kilómetros manualmente.</p></section>
+  <section class="card compact"><p class="notice">Cada cotización queda guardada con empresa, número de servicio, patente y estado de facturación. Los kilómetros se calculan automáticamente por ruta para Base -> Origen, Origen -> Destino y, en Interior, Destino -> Base. Si el servicio de mapas no responde, el operador puede cargar los kilómetros manualmente.</p></section>
 </main>
 <script src="/app.js"></script>
+<script src="/auto-km.js"></script>
 </body>
 </html>
