@@ -153,7 +153,7 @@ app.delete("/api/users/:id", auth, adminOnly, (req, res) => {
 app.get("/api/config", auth, (req, res) => {
   res.json({
     tarifa: TARIFA,
-    reglas: { AMBA_CABA: "Base -> Origen -> Destino", INTERIOR: "Base -> Origen -> Destino -> Base" },
+    reglas: { AMBA_CABA: "Base -> Origen -> Destino", INTERIOR: "Base -> Origen -> Destino -> Base", AUXILIO_MECANICO: "Base -> Origen" },
     tiposServicio: ["Liviano", "Auxilio mecanico", "Semipesado"],
     notaDistancias: "En esta prueba los kilometros se cargan manualmente. El PDF informa bases/localidades, pero no direcciones exactas ni coordenadas para calcular rutas automaticamente."
   });
@@ -191,19 +191,20 @@ app.post("/api/cotizar", auth, (req, res) => {
   const base = basesDoc.bases.find(b => b.id === baseId);
   if (!base) return res.status(400).json({ error: "Base invalida" });
 
-  const k1 = asKm(kmBaseOrigen), k2 = asKm(kmOrigenDestino), k3 = asKm(kmDestinoBase);
-  if (k1 === null || k2 === null) return res.status(400).json({ error: "Los kilometros Base-Origen y Origen-Destino deben ser numeros validos" });
-  if (base.modalidad === "INTERIOR" && k3 === null) return res.status(400).json({ error: "Para Interior debe informar Destino-Base" });
+  const esAuxilioMecanico = String(tipoServicio || "").toLowerCase().replace(/á/g, "a") === "auxilio mecanico";
+  const k1 = asKm(kmBaseOrigen), k2 = esAuxilioMecanico ? 0 : asKm(kmOrigenDestino), k3 = esAuxilioMecanico ? 0 : asKm(kmDestinoBase);
+  if (k1 === null || (!esAuxilioMecanico && k2 === null)) return res.status(400).json({ error: esAuxilioMecanico ? "Los kilometros Base-Origen deben ser un numero valido" : "Los kilometros Base-Origen y Origen-Destino deben ser numeros validos" });
+  if (!esAuxilioMecanico && base.modalidad === "INTERIOR" && k3 === null) return res.status(400).json({ error: "Para Interior debe informar Destino-Base" });
 
-  const kmTotal = base.modalidad === "INTERIOR" ? k1 + k2 + k3 : k1 + k2;
+  const kmTotal = esAuxilioMecanico ? k1 : (base.modalidad === "INTERIOR" ? k1 + k2 + k3 : k1 + k2);
   const subtotalKm = Math.round(kmTotal * TARIFA.km);
   const total = Math.round(TARIFA.movida + subtotalKm);
 
   const cotizacion = {
     id: "COT-" + Date.now(), fecha: new Date().toISOString(), operador: req.user.user,
     base: { id: base.id, prestador: base.prestador, base: base.base, zona: base.zona, modalidad: base.modalidad },
-    tipoServicio: tipoServicio || "Semipesado", origen: String(origen || "").trim(), destino: String(destino || "").trim(),
-    tramos: { baseOrigen: k1, origenDestino: k2, destinoBase: base.modalidad === "INTERIOR" ? k3 : 0 },
+    tipoServicio: tipoServicio || "Semipesado", origen: String(origen || "").trim(), destino: esAuxilioMecanico ? "" : String(destino || "").trim(),
+    tramos: { baseOrigen: k1, origenDestino: k2, destinoBase: !esAuxilioMecanico && base.modalidad === "INTERIOR" ? k3 : 0 },
     kmTotal, tarifa: TARIFA, subtotalKm, total
   };
   cotizaciones.unshift(cotizacion);
