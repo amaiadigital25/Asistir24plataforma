@@ -14,6 +14,11 @@
       .trim();
   }
 
+  function validArgentinaPoint(lat, lon) {
+    return Number.isFinite(lat) && Number.isFinite(lon) &&
+      lat >= -56 && lat <= -20 && lon >= -74 && lon <= -52;
+  }
+
   function canonicalizeCommonStreetNames(value) {
     let text = normalizeText(value);
     if (!text) return "";
@@ -25,6 +30,7 @@
       .replace(/juan\s*b\.?\s*justo/gi, "Juan B. Justo")
       .replace(/gral\.?\s*paz/gi, "General Paz")
       .replace(/generalpaz/gi, "General Paz")
+      .replace(/\bbrig\.?\s*gral\.?\s+/gi, "Brigadier General ")
       .replace(/\bav\.?\s+/gi, "Avenida ")
       .replace(/\bavda\.?\s+/gi, "Avenida ")
       .replace(/\s+/g, " ")
@@ -95,7 +101,11 @@
     if (!query) return null;
 
     const key = `georef:${query.toLowerCase()}`;
-    if (geocodeCache.has(key)) return geocodeCache.get(key);
+    if (geocodeCache.has(key)) {
+      const cached = geocodeCache.get(key);
+      if (validArgentinaPoint(cached?.lat, cached?.lon)) return cached;
+      geocodeCache.delete(key);
+    }
 
     try {
       const url = new URL("https://apis.datos.gob.ar/georef/api/v2.0/direcciones");
@@ -104,9 +114,13 @@
       if (!response.ok) return null;
       const data = await response.json();
       const item = data?.direcciones?.[0];
-      const lat = Number(item?.ubicacion?.lat);
-      const lon = Number(item?.ubicacion?.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      const rawLat = item?.ubicacion?.lat;
+      const rawLon = item?.ubicacion?.lon;
+      if (rawLat === null || rawLat === undefined || rawLon === null || rawLon === undefined) return null;
+
+      const lat = Number(rawLat);
+      const lon = Number(rawLon);
+      if (!validArgentinaPoint(lat, lon)) return null;
 
       const point = { lat, lon, label: item.nomenclatura || query, provider: "Georef" };
       geocodeCache.set(key, point);
@@ -119,13 +133,21 @@
   async function geocodeNominatim(address) {
     const variants = nominatimVariants(address);
     const cacheKey = variants[0]?.toLowerCase();
-    if (cacheKey && geocodeCache.has(`osm:${cacheKey}`)) return geocodeCache.get(`osm:${cacheKey}`);
+    if (cacheKey && geocodeCache.has(`osm:${cacheKey}`)) {
+      const cached = geocodeCache.get(`osm:${cacheKey}`);
+      if (validArgentinaPoint(cached?.lat, cached?.lon)) return cached;
+      geocodeCache.delete(`osm:${cacheKey}`);
+    }
 
     let lastQuery = variants[0] || normalizeText(address);
     for (const query of variants) {
       lastQuery = query;
       const key = `osm:${query.toLowerCase()}`;
-      if (geocodeCache.has(key)) return geocodeCache.get(key);
+      if (geocodeCache.has(key)) {
+        const cached = geocodeCache.get(key);
+        if (validArgentinaPoint(cached?.lat, cached?.lon)) return cached;
+        geocodeCache.delete(key);
+      }
 
       const wait = Math.max(0, 1100 - (Date.now() - lastNominatimAt));
       if (wait) await sleep(wait);
@@ -142,8 +164,11 @@
       const item = items?.[0];
       if (!item) continue;
 
-      const point = { lat: Number(item.lat), lon: Number(item.lon), label: item.display_name || query, provider: "OpenStreetMap" };
-      if (!Number.isFinite(point.lat) || !Number.isFinite(point.lon)) continue;
+      const lat = Number(item.lat);
+      const lon = Number(item.lon);
+      if (!validArgentinaPoint(lat, lon)) continue;
+
+      const point = { lat, lon, label: item.display_name || query, provider: "OpenStreetMap" };
       geocodeCache.set(key, point);
       if (cacheKey) geocodeCache.set(`osm:${cacheKey}`, point);
       return point;
@@ -154,11 +179,13 @@
 
   async function geocodeFlexible(address) {
     const georef = await geocodeGeoref(address);
-    if (georef) return georef;
+    if (georef && validArgentinaPoint(georef.lat, georef.lon)) return georef;
     return geocodeNominatim(address);
   }
 
   async function snapToRoad(point, routerBase) {
+    if (!validArgentinaPoint(point?.lat, point?.lon)) throw new Error("coordenadas inválidas");
+
     const url = `${routerBase}/nearest/v1/driving/${point.lon},${point.lat}?number=1`;
     const response = await fetch(url, { headers: { "Accept": "application/json" } });
     if (!response.ok) return point;
@@ -167,11 +194,15 @@
     if (!Array.isArray(location) || location.length < 2) return point;
     const lon = Number(location[0]);
     const lat = Number(location[1]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return point;
+    if (!validArgentinaPoint(lat, lon)) return point;
     return { ...point, lat, lon };
   }
 
   async function routeKmWithRouter(from, to, routerBase) {
+    if (!validArgentinaPoint(from?.lat, from?.lon) || !validArgentinaPoint(to?.lat, to?.lon)) {
+      throw new Error("una de las ubicaciones no tiene coordenadas válidas en Argentina");
+    }
+
     const [fromRoad, toRoad] = await Promise.all([
       snapToRoad(from, routerBase),
       snapToRoad(to, routerBase)
