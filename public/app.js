@@ -2,7 +2,6 @@ const token = localStorage.getItem("a24_token");
 if (!token) location.href = "/";
 const $ = id => document.getElementById(id);
 let bases = [];
-let distanceRequestId = 0;
 
 async function api(path, options = {}) {
   const headers = Object.assign({}, options.headers || {}, {"Authorization": "Bearer " + token});
@@ -53,50 +52,17 @@ function setKmStatus(message, isError = false) {
   status.classList.toggle("error", isError);
 }
 
-function invalidateGoogleKm() {
+function invalidateRouteKm() {
   const input = $("kmBaseOrigen");
-  if (input.dataset.google === "true") input.value = "";
-  input.dataset.google = "false";
+  if (input.dataset.auto === "true") input.value = "";
+  input.dataset.auto = "false";
   delete input.dataset.baseId;
   delete input.dataset.origen;
 }
 
 async function calculateBaseOriginKm({silent = false} = {}) {
-  const base = selectedBase();
-  const origen = $("origen").value.trim();
-  if (!base || !origen) {
-    if (!silent) setKmStatus("Ingrese la base y el origen para calcular el recorrido.");
-    return false;
-  }
-
-  const requestId = ++distanceRequestId;
-  const button = $("calcKmButton");
-  button.disabled = true;
-  setKmStatus("Calculando recorrido Base -> Origen con Google Maps...");
-
-  try {
-    const data = await api("/api/distancia", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({baseId: base.id, origen})
-    });
-    if (requestId !== distanceRequestId) return false;
-
-    const input = $("kmBaseOrigen");
-    input.value = Number(data.km).toFixed(1);
-    input.dataset.google = "true";
-    input.dataset.baseId = base.id;
-    input.dataset.origen = origen;
-    setKmStatus(`Google Maps: ${Number(data.km).toFixed(1)} km desde ${data.desde} hasta ${data.hasta}.`);
-    return true;
-  } catch (err) {
-    if (requestId !== distanceRequestId) return false;
-    $("kmBaseOrigen").dataset.google = "false";
-    setKmStatus(`Google Maps no disponible: ${err.message}. Puede ingresar los km manualmente.`, true);
-    return false;
-  } finally {
-    if (requestId === distanceRequestId) button.disabled = false;
-  }
+  if (!silent) setKmStatus("Cargando el servicio de cálculo de rutas...");
+  return false;
 }
 
 function updateRouteUI() {
@@ -170,14 +136,14 @@ async function loadQuotes() {
 }
 
 $("baseId").addEventListener("change", async () => {
-  invalidateGoogleKm();
+  invalidateRouteKm();
   updateRouteUI();
   if ($("origen").value.trim()) await calculateBaseOriginKm({silent:true});
 });
 $("tipoServicio").addEventListener("change", updateRouteUI);
 $("origen").addEventListener("input", () => {
-  invalidateGoogleKm();
-  setKmStatus("Origen modificado. Google Maps recalculará el tramo.");
+  invalidateRouteKm();
+  setKmStatus("Origen modificado. El recorrido se recalculará automáticamente.");
 });
 $("origen").addEventListener("blur", () => calculateBaseOriginKm({silent:true}));
 $("calcKmButton").addEventListener("click", () => calculateBaseOriginKm());
@@ -201,9 +167,9 @@ $("quoteForm").addEventListener("submit", async e => {
 
     const kmInput = $("kmBaseOrigen");
     const currentBase = $("baseId").value;
-    const googleKmEsActual = kmInput.dataset.google === "true" && kmInput.dataset.baseId === currentBase && kmInput.dataset.origen === origen;
-    if (!googleKmEsActual) await calculateBaseOriginKm({silent:true});
-    if (!kmInput.value) throw new Error("Google Maps no pudo calcular Base -> Origen. Ingrese los kilómetros manualmente para continuar.");
+    const kmEsActual = kmInput.dataset.auto === "true" && kmInput.dataset.baseId === currentBase && kmInput.dataset.origen === origen;
+    if (!kmEsActual) await calculateBaseOriginKm({silent:true});
+    if (!kmInput.value) throw new Error("No se pudo calcular Base -> Origen. Ingrese los kilómetros manualmente para continuar.");
 
     const payload = {
       empresa: $("empresa").value.trim(),
