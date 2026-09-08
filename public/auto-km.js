@@ -45,8 +45,6 @@
       .replace(/,?\s*argentina\s*$/i, "")
       .trim();
 
-    // Algunas esquinas de CABA se ingresan sin localidad. Estos nombres son inequívocos
-    // y agregar CABA mejora mucho la precisión sin depender de Google Maps.
     if (/Lope de Vega/i.test(text) && /Francisco Beir[oó]/i.test(text) && !/,/.test(text)) {
       text += ", Ciudad Autónoma de Buenos Aires";
     }
@@ -160,15 +158,59 @@
     return geocodeNominatim(address);
   }
 
-  async function routeKm(from, to) {
-    const coords = `${from.lon},${from.lat};${to.lon},${to.lat}`;
-    const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=false&steps=false`;
+  async function snapToRoad(point, routerBase) {
+    const url = `${routerBase}/nearest/v1/driving/${point.lon},${point.lat}?number=1`;
     const response = await fetch(url, { headers: { "Accept": "application/json" } });
-    if (!response.ok) throw new Error("No se pudo calcular la ruta");
+    if (!response.ok) return point;
+    const data = await response.json();
+    const location = data?.waypoints?.[0]?.location;
+    if (!Array.isArray(location) || location.length < 2) return point;
+    const lon = Number(location[0]);
+    const lat = Number(location[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return point;
+    return { ...point, lat, lon };
+  }
+
+  async function routeKmWithRouter(from, to, routerBase) {
+    const [fromRoad, toRoad] = await Promise.all([
+      snapToRoad(from, routerBase),
+      snapToRoad(to, routerBase)
+    ]);
+
+    const coords = `${fromRoad.lon},${fromRoad.lat};${toRoad.lon},${toRoad.lat}`;
+    const url = `${routerBase}/route/v1/driving/${coords}?overview=false&steps=false&alternatives=false`;
+    const response = await fetch(url, { headers: { "Accept": "application/json" } });
+    if (!response.ok) throw new Error(`servidor de rutas HTTP ${response.status}`);
     const data = await response.json();
     const meters = Number(data?.routes?.[0]?.distance);
-    if (!Number.isFinite(meters)) throw new Error("No se encontró un recorrido vehicular");
+    if (!Number.isFinite(meters)) throw new Error(data?.message || "sin recorrido vehicular");
     return Math.round((meters / 1000) * 10) / 10;
+  }
+
+  async function routeKm(from, to) {
+    const routers = [
+      "https://router.project-osrm.org",
+      "https://routing.openstreetmap.de/routed-car"
+    ];
+    let lastError = null;
+
+    for (const router of routers) {
+      try {
+        return await routeKmWithRouter(from, to, router);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw new Error(lastError?.message || "No se pudo calcular la ruta vehicular");
+  }
+
+  async function routeSegment(label, from, to) {
+    try {
+      return await routeKm(from, to);
+    } catch (error) {
+      throw new Error(`${label}: ${error.message}`);
+    }
   }
 
   function setAutoValue(input, value) {
@@ -209,7 +251,7 @@
       const origenCoord = await geocodeFlexible(origen);
       if (requestId !== autoRequestId) return false;
 
-      const k1 = await routeKm(baseCoord, origenCoord);
+      const k1 = await routeSegment("Base → Origen", baseCoord, origenCoord);
       if (requestId !== autoRequestId) return false;
 
       const k1Input = $("kmBaseOrigen");
@@ -222,11 +264,11 @@
       if (!auxilio) {
         const destinoCoord = await geocodeFlexible(destino);
         if (requestId !== autoRequestId) return false;
-        k2 = await routeKm(origenCoord, destinoCoord);
+        k2 = await routeSegment("Origen → Destino", origenCoord, destinoCoord);
         setAutoValue($("kmOrigenDestino"), k2);
 
         if (base.modalidad === "INTERIOR") {
-          k3 = await routeKm(destinoCoord, baseCoord);
+          k3 = await routeSegment("Destino → Base", destinoCoord, baseCoord);
           setAutoValue($("kmDestinoBase"), k3);
         }
       }
@@ -238,7 +280,6 @@
       setKmStatus(`${partes.join(" · ")} · cálculo automático de ruta${proveedor}.`);
       return true;
     } catch (error) {
-      $("kmBaseOrigen").dataset.auto = "false";
       setKmStatus(`No se pudo calcular automáticamente: ${error.message}. Puede cargar los km manualmente.`, true);
       return false;
     } finally {
