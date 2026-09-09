@@ -25,6 +25,15 @@
     "nahuel-ruso-parque-siguiman": "Villa Parque Siquiman, Punilla, Córdoba, Argentina"
   };
 
+  // Referencias estables para recuperar Plus Codes cortos. Usar el centro de
+  // la localidad evita que un geocodificador confunda, por ejemplo, Córdoba
+  // capital con un comercio llamado "Córdoba" en otra provincia.
+  const LOCALITY_POINTS = {
+    "cordoba": { lat: -31.4167, lon: -64.1833, label: "Córdoba, Córdoba, Argentina" },
+    "cordoba cordoba province": { lat: -31.4167, lon: -64.1833, label: "Córdoba, Córdoba, Argentina" },
+    "cordoba cordoba provincia": { lat: -31.4167, lon: -64.1833, label: "Córdoba, Córdoba, Argentina" }
+  };
+
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
   function normalizeText(value) {
@@ -49,6 +58,26 @@
       .replace(/\bavda?\.?\s+/gi, "Avenida ")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  function lookupLocality(value) {
+    const key = normalizeText(value)
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[,]+/g, " ")
+      .replace(/\bargentina\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const point = LOCALITY_POINTS[key];
+    return point ? { ...point, provider: "Localidad registrada" } : null;
+  }
+
+  function parseCoordinates(value) {
+    const match = normalizeText(value).match(/^\(?\s*(-?\d{1,2}(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*\)?$/);
+    if (!match) return null;
+    const lat = Number(match[1].replace(",", "."));
+    const lon = Number(match[2].replace(",", "."));
+    return validPoint(lat, lon) ? { lat, lon, label: value, provider: "Coordenadas" } : null;
   }
 
   function validPoint(lat, lon) {
@@ -213,6 +242,10 @@
   }
 
   async function geocodeRegular(value, base) {
+    const coordinates = parseCoordinates(value);
+    if (coordinates) return coordinates;
+    const knownLocality = lookupLocality(value);
+    if (knownLocality) return knownLocality;
     const query = contextualAddress(value, base);
     const georef = await geocodeGeoref(query);
     if (georef) return georef;
@@ -243,7 +276,7 @@
 
     let reference;
     if (plus.locality) {
-      reference = await geocodeRegular(plus.locality, base);
+      reference = lookupLocality(plus.locality) || await geocodeRegular(plus.locality, base);
     } else {
       reference = basePoint(base) || await geocodeRegular(baseAddress(base), base);
     }
