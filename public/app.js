@@ -46,6 +46,16 @@ function selectedBase() {
   return bases.find(b => b.id === $("baseId").value);
 }
 
+function currentModalidad() {
+  return $("modalidad").value === "INTERIOR" ? "INTERIOR" : "AMBA_CABA";
+}
+
+function syncModalidadWithBase() {
+  const base = selectedBase();
+  if (!base) return;
+  $("modalidad").value = base.modalidad === "INTERIOR" ? "INTERIOR" : "AMBA_CABA";
+}
+
 function setKmStatus(message, isError = false) {
   const status = $("kmStatus");
   status.textContent = message;
@@ -68,26 +78,27 @@ async function calculateBaseOriginKm({silent = false} = {}) {
 function updateRouteUI() {
   const base = selectedBase();
   if (!base) return;
-  $("modalidad").value = base.modalidad === "INTERIOR" ? "Interior" : "CABA / AMBA";
+  const modalidad = currentModalidad();
   const auxilio = isAuxilioMecanico($("tipoServicio").value);
-  $("routeRule").textContent = routeLabel(base.modalidad, $("tipoServicio").value);
+  $("routeRule").textContent = routeLabel(modalidad, $("tipoServicio").value);
   $("destinationWrap").style.display = auxilio ? "none" : "grid";
   $("kmOriginDestinationWrap").style.display = auxilio ? "none" : "grid";
   $("destino").required = !auxilio;
   $("kmOrigenDestino").required = !auxilio;
-  $("returnWrap").style.display = !auxilio && base.modalidad === "INTERIOR" ? "grid" : "none";
-  $("kmDestinoBase").required = !auxilio && base.modalidad === "INTERIOR";
+  $("returnWrap").style.display = !auxilio && modalidad === "INTERIOR" ? "grid" : "none";
+  $("kmDestinoBase").required = !auxilio && modalidad === "INTERIOR";
   if (auxilio) {
     $("destino").value = "";
     $("kmOrigenDestino").value = "";
     $("kmDestinoBase").value = "";
-  } else if (base.modalidad !== "INTERIOR") {
+  } else if (modalidad !== "INTERIOR") {
     $("kmDestinoBase").value = "";
   }
 }
 
 function renderBaseSelect() {
   $("baseId").innerHTML = bases.map(b => `<option value="${b.id}">${b.base} - ${b.prestador} (${b.zona})</option>`).join("");
+  syncModalidadWithBase();
   updateRouteUI();
 }
 
@@ -137,7 +148,14 @@ async function loadQuotes() {
 
 $("baseId").addEventListener("change", async () => {
   invalidateRouteKm();
+  syncModalidadWithBase();
   updateRouteUI();
+  if ($("origen").value.trim()) await calculateBaseOriginKm({silent:true});
+});
+$("modalidad").addEventListener("change", async () => {
+  invalidateRouteKm();
+  updateRouteUI();
+  setKmStatus("Modalidad modificada. El recorrido se recalculará automáticamente.");
   if ($("origen").value.trim()) await calculateBaseOriginKm({silent:true});
 });
 $("tipoServicio").addEventListener("change", updateRouteUI);
@@ -176,6 +194,7 @@ $("quoteForm").addEventListener("submit", async e => {
       numeroServicio: $("numeroServicio").value.trim(),
       patente: $("patente").value.trim().toUpperCase(),
       baseId: currentBase,
+      modalidad: currentModalidad(),
       tipoServicio: $("tipoServicio").value,
       origen,
       destino: $("destino").value,
