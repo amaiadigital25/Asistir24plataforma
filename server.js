@@ -281,9 +281,10 @@ app.get("/api/resumen", auth, (req, res) => {
 });
 
 app.post("/api/cotizar", auth, (req, res) => {
-  const { baseId, tipoServicio, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente } = req.body || {};
+  const { baseId, modalidad, tipoServicio, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente } = req.body || {};
   const base = basesDoc.bases.find(b => b.id === baseId);
   if (!base) return res.status(400).json({ error: "Base invalida" });
+  const modalidadCotizacion = ["AMBA_CABA", "INTERIOR"].includes(modalidad) ? modalidad : base.modalidad;
 
   const empresaTexto = String(empresa || "").trim();
   const servicioTexto = String(numeroServicio || "").trim();
@@ -295,18 +296,18 @@ app.post("/api/cotizar", auth, (req, res) => {
   const esAuxilioMecanico = String(tipoServicio || "").toLowerCase().replace(/á/g, "a") === "auxilio mecanico";
   const k1 = asKm(kmBaseOrigen), k2 = esAuxilioMecanico ? 0 : asKm(kmOrigenDestino), k3 = esAuxilioMecanico ? 0 : asKm(kmDestinoBase);
   if (k1 === null || (!esAuxilioMecanico && k2 === null)) return res.status(400).json({ error: esAuxilioMecanico ? "Los kilometros Base-Origen deben ser un numero valido" : "Los kilometros Base-Origen y Origen-Destino deben ser numeros validos" });
-  if (!esAuxilioMecanico && base.modalidad === "INTERIOR" && k3 === null) return res.status(400).json({ error: "Para Interior debe informar Destino-Base" });
+  if (!esAuxilioMecanico && modalidadCotizacion === "INTERIOR" && k3 === null) return res.status(400).json({ error: "Para Interior debe informar Destino-Base" });
 
-  const kmTotal = esAuxilioMecanico ? k1 : (base.modalidad === "INTERIOR" ? k1 + k2 + k3 : k1 + k2);
+  const kmTotal = esAuxilioMecanico ? k1 : (modalidadCotizacion === "INTERIOR" ? k1 + k2 + k3 : k1 + k2);
   const subtotalKm = Math.round(kmTotal * TARIFA.km);
   const total = Math.round(TARIFA.movida + subtotalKm);
 
   const cotizacion = {
     id: "COT-" + Date.now(), fecha: new Date().toISOString(), operador: req.user.user,
     empresa: empresaTexto, numeroServicio: servicioTexto, patente: patenteTexto,
-    base: { id: base.id, prestador: base.prestador, base: base.base, zona: base.zona, modalidad: base.modalidad },
+    base: { id: base.id, prestador: base.prestador, base: base.base, zona: base.zona, modalidad: modalidadCotizacion },
     tipoServicio: tipoServicio || "Semipesado", origen: String(origen || "").trim(), destino: esAuxilioMecanico ? "" : String(destino || "").trim(),
-    tramos: { baseOrigen: k1, origenDestino: k2, destinoBase: !esAuxilioMecanico && base.modalidad === "INTERIOR" ? k3 : 0 },
+    tramos: { baseOrigen: k1, origenDestino: k2, destinoBase: !esAuxilioMecanico && modalidadCotizacion === "INTERIOR" ? k3 : 0 },
     kmTotal, tarifa: TARIFA, subtotalKm, total,
     facturacion: {
       estado: "PENDIENTE",
