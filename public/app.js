@@ -5,7 +5,8 @@ let bases = [];
 
 async function api(path, options = {}) {
   const headers = Object.assign({}, options.headers || {}, {"Authorization": "Bearer " + token});
-  const res = await fetch(path, Object.assign({}, options, {headers}));
+  const requestOptions = Object.assign({cache: "no-store"}, options, {headers});
+  const res = await fetch(path, requestOptions);
   if (res.status === 401) {
     localStorage.removeItem("a24_token");
     location.href = "/";
@@ -146,6 +147,25 @@ async function loadQuotes() {
   $("quoteRows").innerHTML = data.items.map(q => `<tr><td>${dateTime(q.fecha)}</td><td>${q.id}</td><td>${q.empresa || "-"}</td><td>${q.numeroServicio || "-"}</td><td>${q.patente || "-"}</td><td>${q.base.base} - ${q.base.prestador}</td><td>${Number(q.kmTotal || 0).toFixed(1)}</td><td><strong>${ars(q.total)}</strong></td><td>${billingLabel(q.facturacion?.estado)}</td></tr>`).join("") || `<tr><td colspan="9" class="muted">Todavía no hay cotizaciones.</td></tr>`;
 }
 
+async function refreshDashboardData() {
+  const button = $("refreshQuotes");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Actualizando...";
+  try {
+    await Promise.all([loadQuotes(), loadStats(), loadConfig()]);
+    button.textContent = "Actualizado ✓";
+    setTimeout(() => {
+      button.textContent = originalText;
+      button.disabled = false;
+    }, 1200);
+  } catch (error) {
+    console.error(error);
+    button.textContent = "Reintentar";
+    button.disabled = false;
+  }
+}
+
 $("baseId").addEventListener("change", async () => {
   invalidateRouteKm();
   syncModalidadWithBase();
@@ -167,7 +187,10 @@ $("origen").addEventListener("blur", () => calculateBaseOriginKm({silent:true}))
 $("calcKmButton").addEventListener("click", () => calculateBaseOriginKm());
 $("searchBase").addEventListener("input", renderBases);
 $("filterModalidad").addEventListener("change", renderBases);
-$("refreshQuotes").addEventListener("click", loadQuotes);
+$("refreshQuotes").addEventListener("click", event => {
+  event.preventDefault();
+  refreshDashboardData();
+});
 $("logout").addEventListener("click", () => {
   localStorage.removeItem("a24_token");
   localStorage.removeItem("a24_role");
