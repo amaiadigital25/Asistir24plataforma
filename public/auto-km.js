@@ -256,6 +256,7 @@
 
   async function calculateAutomaticKm({ silent = false } = {}) {
     const base = selectedBase();
+    const modalidad = typeof currentModalidad === "function" ? currentModalidad() : base?.modalidad;
     const origen = normalizeText($("origen").value);
     const auxilio = isAuxilioMecanico($("tipoServicio").value);
     const destino = auxilio ? "" : normalizeText($("destino").value);
@@ -298,7 +299,7 @@
         k2 = await routeSegment("Origen → Destino", origenCoord, destinoCoord);
         setAutoValue($("kmOrigenDestino"), k2);
 
-        if (base.modalidad === "INTERIOR") {
+        if (modalidad === "INTERIOR") {
           k3 = await routeSegment("Destino → Base", destinoCoord, baseCoord);
           setAutoValue($("kmDestinoBase"), k3);
         }
@@ -306,7 +307,7 @@
 
       const partes = [`Base → Origen: ${k1.toFixed(1)} km`];
       if (!auxilio) partes.push(`Origen → Destino: ${k2.toFixed(1)} km`);
-      if (!auxilio && base.modalidad === "INTERIOR") partes.push(`Destino → Base: ${k3.toFixed(1)} km`);
+      if (!auxilio && modalidad === "INTERIOR") partes.push(`Destino → Base: ${k3.toFixed(1)} km`);
       const proveedor = origenCoord.provider ? ` · ubicación: ${origenCoord.provider}` : "";
       setKmStatus(`${partes.join(" · ")} · cálculo automático de ruta${proveedor}.`);
       return true;
