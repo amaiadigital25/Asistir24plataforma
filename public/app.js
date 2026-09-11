@@ -34,6 +34,36 @@ function routeLabel(modalidad, tipoServicio) {
   return modalidad === "INTERIOR" ? "Base -> Origen -> Destino -> Base" : "Base -> Origen -> Destino";
 }
 
+const DISPATCH_WHATSAPP = "5491126433243";
+
+function dispatchWhatsappUrl(q) {
+  const modalidad = q.base?.modalidad === "INTERIOR" ? "Interior" : "CABA / AMBA";
+  const auxilio = isAuxilioMecanico(q.tipoServicio);
+  const recorrido = auxilio
+    ? `Base → Origen: ${Number(q.tramos?.baseOrigen || 0).toFixed(1)} km`
+    : q.base?.modalidad === "INTERIOR"
+      ? `Base → Origen: ${Number(q.tramos?.baseOrigen || 0).toFixed(1)} km | Origen → Destino: ${Number(q.tramos?.origenDestino || 0).toFixed(1)} km | Destino → Base: ${Number(q.tramos?.destinoBase || 0).toFixed(1)} km`
+      : `Base → Origen: ${Number(q.tramos?.baseOrigen || 0).toFixed(1)} km | Origen → Destino: ${Number(q.tramos?.origenDestino || 0).toFixed(1)} km`;
+
+  const lines = [
+    "ASISTIR24 - DESPACHO DE SERVICIO",
+    "",
+    `Empresa / cliente: ${q.empresa || "-"}`,
+    `Nº de servicio: ${q.numeroServicio || "-"}`,
+    `Patente: ${q.patente || "-"}`,
+    `Tipo de servicio: ${q.tipoServicio || "-"}`,
+    `Base asignada: ${q.base?.base || "-"} - ${q.base?.prestador || "-"}`,
+    `Modalidad: ${modalidad}`,
+    `Origen: ${q.origen || "-"}`,
+    ...(!auxilio ? [`Destino: ${q.destino || "-"}`] : []),
+    `Recorrido: ${recorrido}`,
+    `Km totales: ${Number(q.kmTotal || 0).toFixed(1)} km`,
+    `ID cotización: ${q.id || "-"}`
+  ];
+
+  return `https://wa.me/${DISPATCH_WHATSAPP}?text=${encodeURIComponent(lines.join("\n"))}`;
+}
+
 function billingLabel(estado) {
   return ({
     PENDIENTE: "Pendiente",
@@ -230,7 +260,7 @@ $("quoteForm").addEventListener("submit", async e => {
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify(payload)
     });
-    result.innerHTML = `<div class="result-grid"><div><span>Servicio</span><strong>${q.numeroServicio}</strong></div><div><span>Empresa</span><strong>${q.empresa}</strong></div><div><span>Patente</span><strong>${q.patente}</strong></div><div><span>Km totales</span><strong>${q.kmTotal.toFixed(1)} km</strong></div><div><span>Movida</span><strong>${ars(q.tarifa.movida)}</strong></div><div><span>Kilómetros</span><strong>${ars(q.subtotalKm)}</strong></div><div class="total"><span>Total</span><strong>${ars(q.total)}</strong></div><div><span>Facturación</span><strong>Pendiente</strong></div><div><span>ID</span><strong>${q.id}</strong></div></div>`;
+    result.innerHTML = `<div class="result-grid"><div><span>Servicio</span><strong>${q.numeroServicio}</strong></div><div><span>Empresa</span><strong>${q.empresa}</strong></div><div><span>Patente</span><strong>${q.patente}</strong></div><div><span>Km totales</span><strong>${q.kmTotal.toFixed(1)} km</strong></div><div><span>Movida</span><strong>${ars(q.tarifa.movida)}</strong></div><div><span>Kilómetros</span><strong>${ars(q.subtotalKm)}</strong></div><div class="total"><span>Total</span><strong>${ars(q.total)}</strong></div><div><span>Facturación</span><strong>Pendiente</strong></div><div><span>ID</span><strong>${q.id}</strong></div></div><div style="margin-top:16px"><a class="btn primary" href="${dispatchWhatsappUrl(q)}" target="_blank" rel="noopener noreferrer">Enviar servicio por WhatsApp a Despacho</a></div>`;
     await Promise.all([loadStats(), loadQuotes()]);
   } catch (err) {
     result.innerHTML = `<span class="error">${err.message}</span>`;
