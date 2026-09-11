@@ -18,6 +18,7 @@
       <div class="section-head"><div><p class="eyebrow">COTIZADOR</p><h2>Nueva cotización</h2></div><span class="pill" id="tarifaPill">Cargando tarifa...</span></div>
       <p class="notice" id="routeRule">Seleccione una base para ver el circuito.</p>
       <form id="quoteForm" class="form-grid">
+        <label>Tipo de cliente<select id="tipoCliente"><option value="COMPANIA" selected>Compañía</option><option value="PARTICULAR">Particular</option></select></label>
         <label>Empresa / cliente<input id="empresa" required placeholder="Ej.: San Cristóbal Seguros"></label>
         <label>Nº de servicio<input id="numeroServicio" required placeholder="Ej.: 458721"></label>
         <label>Patente<input id="patente" required placeholder="Ej.: AB123CD"></label>
@@ -45,11 +46,11 @@
   </section>
   <section class="card">
     <div class="section-head"><div><p class="eyebrow">HISTORIAL</p><h2>Cotizaciones guardadas</h2></div><button class="btn ghost small" id="refreshQuotes">Actualizar</button></div>
-    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>ID</th><th>Empresa</th><th>Servicio</th><th>Patente</th><th>Base</th><th>Km</th><th>Total</th><th>Facturación</th></tr></thead><tbody id="quoteRows"></tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>ID</th><th>Tipo</th><th>Empresa / Cliente</th><th>Servicio</th><th>Patente</th><th>Base</th><th>Km</th><th>Total</th><th>Facturación</th></tr></thead><tbody id="quoteRows"></tbody></table></div>
   </section>
   <section class="card compact"><p class="notice">Cada cotización queda guardada con empresa, número de servicio, patente y estado de facturación. Los kilómetros se calculan automáticamente por ruta para Base -> Origen, Origen -> Destino y, en Interior, Destino -> Base. Si el servicio de mapas no responde, el operador puede cargar los kilómetros manualmente.</p></section>
 </main>
-<script src="/app.js?v=20260911-2"></script>
+<script src="/app.js?v=20260911-3"></script>
 <script src="/auto-km-v2.js?v=20260911-1"></script>
 </body>
 </html>
