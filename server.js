@@ -20,14 +20,7 @@ const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const FALLBACK_SALT = "939d696df209329913ecaa38ae8b0ca2";
 const FALLBACK_HASH = "e260eb5c451c4702ca7b611408f2aff4125c08384d012ce6f158a0c513f3f9f766270bbd9e26723ed59bb3251a5f6f247b93a6b79226eb0d6924cf3ca2e46939";
 const TARIFA_COMPANIA = Object.freeze({ movida: 43989, km: 1199, moneda: "ARS", configured: true });
-const particularMovida = Number(process.env.PARTICULAR_MOVIDA);
-const particularKm = Number(process.env.PARTICULAR_KM);
-const TARIFA_PARTICULAR = Object.freeze({
-  movida: Number.isFinite(particularMovida) && particularMovida >= 0 ? particularMovida : null,
-  km: Number.isFinite(particularKm) && particularKm >= 0 ? particularKm : null,
-  moneda: "ARS",
-  configured: Number.isFinite(particularMovida) && particularMovida >= 0 && Number.isFinite(particularKm) && particularKm >= 0
-});
+const TARIFA_PARTICULAR = Object.freeze({ movida: 60000, km: 2000, moneda: "ARS", configured: true });
 const TARIFAS = Object.freeze({ COMPANIA: TARIFA_COMPANIA, PARTICULAR: TARIFA_PARTICULAR });
 
 function tarifaPorTipoCliente(tipoCliente) {
