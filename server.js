@@ -196,7 +196,7 @@ app.get("/api/config", auth, (req, res) => {
     tarifa: TARIFA_COMPANIA,
     tarifas: TARIFAS,
     reglas: { AMBA_CABA: "Base -> Origen -> Destino", INTERIOR: "Base -> Origen -> Destino -> Base", AUXILIO_MECANICO: "Base -> Origen" },
-    tiposServicio: ["Liviano", "Auxilio mecanico", "Semipesado"],
+    tiposServicio: ["Liviano", "Moto", "Auxilio mecanico", "Semipesado"],
     notaDistancias: "Los kilómetros Base-Origen se calculan automáticamente con Google Maps a partir de la base y la ubicación ingresada."
   });
 });
