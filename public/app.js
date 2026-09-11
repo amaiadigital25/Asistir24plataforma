@@ -83,11 +83,22 @@ function updateTarifaPill() {
   if (!appConfig) return;
   const tipo = $("tipoCliente")?.value === "PARTICULAR" ? "PARTICULAR" : "COMPANIA";
   const tarifa = appConfig.tarifas?.[tipo] || appConfig.tarifa;
-  if (!tarifa?.configured && tipo === "PARTICULAR") {
-    $("tarifaPill").textContent = "Particular: tarifa pendiente";
-    return;
-  }
   $("tarifaPill").textContent = `${tipoClienteLabel(tipo)} · ${ars(tarifa.movida)} + ${ars(tarifa.km)}/km`;
+
+  const companiaBtn = $("tarifaCompania");
+  const particularBtn = $("tarifaParticular");
+  if (companiaBtn && particularBtn) {
+    const esParticular = tipo === "PARTICULAR";
+    companiaBtn.classList.toggle("primary", !esParticular);
+    companiaBtn.classList.toggle("ghost", esParticular);
+    particularBtn.classList.toggle("primary", esParticular);
+    particularBtn.classList.toggle("ghost", !esParticular);
+  }
+}
+
+function setTipoCliente(tipo) {
+  $("tipoCliente").value = tipo === "PARTICULAR" ? "PARTICULAR" : "COMPANIA";
+  updateTarifaPill();
 }
 
 function selectedBase() {
@@ -226,7 +237,8 @@ $("modalidad").addEventListener("change", async () => {
   if ($("origen").value.trim()) await calculateBaseOriginKm({silent:true});
 });
 $("tipoServicio").addEventListener("change", updateRouteUI);
-$("tipoCliente").addEventListener("change", updateTarifaPill);
+$("tarifaCompania").addEventListener("click", () => setTipoCliente("COMPANIA"));
+$("tarifaParticular").addEventListener("click", () => setTipoCliente("PARTICULAR"));
 $("origen").addEventListener("input", () => {
   invalidateRouteKm();
   setKmStatus("Origen modificado. El recorrido se recalculará automáticamente.");
