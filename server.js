@@ -19,7 +19,20 @@ if (!process.env.JWT_SECRET) console.warn("[Asistir24] JWT_SECRET no configurado
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const FALLBACK_SALT = "939d696df209329913ecaa38ae8b0ca2";
 const FALLBACK_HASH = "e260eb5c451c4702ca7b611408f2aff4125c08384d012ce6f158a0c513f3f9f766270bbd9e26723ed59bb3251a5f6f247b93a6b79226eb0d6924cf3ca2e46939";
-const TARIFA = Object.freeze({ movida: 43989, km: 1199, moneda: "ARS" });
+const TARIFA_COMPANIA = Object.freeze({ movida: 43989, km: 1199, moneda: "ARS", configured: true });
+const particularMovida = Number(process.env.PARTICULAR_MOVIDA);
+const particularKm = Number(process.env.PARTICULAR_KM);
+const TARIFA_PARTICULAR = Object.freeze({
+  movida: Number.isFinite(particularMovida) && particularMovida >= 0 ? particularMovida : null,
+  km: Number.isFinite(particularKm) && particularKm >= 0 ? particularKm : null,
+  moneda: "ARS",
+  configured: Number.isFinite(particularMovida) && particularMovida >= 0 && Number.isFinite(particularKm) && particularKm >= 0
+});
+const TARIFAS = Object.freeze({ COMPANIA: TARIFA_COMPANIA, PARTICULAR: TARIFA_PARTICULAR });
+
+function tarifaPorTipoCliente(tipoCliente) {
+  return String(tipoCliente || "").toUpperCase() === "PARTICULAR" ? TARIFAS.PARTICULAR : TARIFAS.COMPANIA;
+}
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "database.json");
 const FACTURACION_ESTADOS = ["PENDIENTE", "LISTO_PARA_FACTURAR", "FACTURADO", "COBRADO"];
 
@@ -187,7 +200,8 @@ app.delete("/api/users/:id", auth, adminOnly, (req, res) => {
 
 app.get("/api/config", auth, (req, res) => {
   res.json({
-    tarifa: TARIFA,
+    tarifa: TARIFA_COMPANIA,
+    tarifas: TARIFAS,
     reglas: { AMBA_CABA: "Base -> Origen -> Destino", INTERIOR: "Base -> Origen -> Destino -> Base", AUXILIO_MECANICO: "Base -> Origen" },
     tiposServicio: ["Liviano", "Auxilio mecanico", "Semipesado"],
     notaDistancias: "Los kilómetros Base-Origen se calculan automáticamente con Google Maps a partir de la base y la ubicación ingresada."
@@ -276,15 +290,21 @@ app.get("/api/resumen", auth, (req, res) => {
     },
     cotizaciones: cotizaciones.length,
     facturacion: billing,
-    tarifa: TARIFA
+    tarifa: TARIFA_COMPANIA,
+    tarifas: TARIFAS
   });
 });
 
 app.post("/api/cotizar", auth, (req, res) => {
-  const { baseId, modalidad, tipoServicio, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente } = req.body || {};
+  const { baseId, modalidad, tipoServicio, tipoCliente, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente } = req.body || {};
   const base = basesDoc.bases.find(b => b.id === baseId);
   if (!base) return res.status(400).json({ error: "Base invalida" });
   const modalidadCotizacion = ["AMBA_CABA", "INTERIOR"].includes(modalidad) ? modalidad : base.modalidad;
+  const tipoClienteCotizacion = String(tipoCliente || "").toUpperCase() === "PARTICULAR" ? "PARTICULAR" : "COMPANIA";
+  const tarifaCotizacion = tarifaPorTipoCliente(tipoClienteCotizacion);
+  if (!tarifaCotizacion.configured) {
+    return res.status(400).json({ error: "La tarifa para particulares todavía no está configurada. Cargue movida y valor por km antes de cotizar." });
+  }
 
   const empresaTexto = String(empresa || "").trim();
   const servicioTexto = String(numeroServicio || "").trim();
@@ -299,16 +319,16 @@ app.post("/api/cotizar", auth, (req, res) => {
   if (!esAuxilioMecanico && modalidadCotizacion === "INTERIOR" && k3 === null) return res.status(400).json({ error: "Para Interior debe informar Destino-Base" });
 
   const kmTotal = esAuxilioMecanico ? k1 : (modalidadCotizacion === "INTERIOR" ? k1 + k2 + k3 : k1 + k2);
-  const subtotalKm = Math.round(kmTotal * TARIFA.km);
-  const total = Math.round(TARIFA.movida + subtotalKm);
+  const subtotalKm = Math.round(kmTotal * tarifaCotizacion.km);
+  const total = Math.round(tarifaCotizacion.movida + subtotalKm);
 
   const cotizacion = {
     id: "COT-" + Date.now(), fecha: new Date().toISOString(), operador: req.user.user,
-    empresa: empresaTexto, numeroServicio: servicioTexto, patente: patenteTexto,
+    empresa: empresaTexto, numeroServicio: servicioTexto, patente: patenteTexto, tipoCliente: tipoClienteCotizacion,
     base: { id: base.id, prestador: base.prestador, base: base.base, zona: base.zona, modalidad: modalidadCotizacion },
     tipoServicio: tipoServicio || "Semipesado", origen: String(origen || "").trim(), destino: esAuxilioMecanico ? "" : String(destino || "").trim(),
     tramos: { baseOrigen: k1, origenDestino: k2, destinoBase: !esAuxilioMecanico && modalidadCotizacion === "INTERIOR" ? k3 : 0 },
-    kmTotal, tarifa: TARIFA, subtotalKm, total,
+    kmTotal, tarifa: { movida: tarifaCotizacion.movida, km: tarifaCotizacion.km, moneda: tarifaCotizacion.moneda }, subtotalKm, total,
     facturacion: {
       estado: "PENDIENTE",
       facturaNumero: "",
