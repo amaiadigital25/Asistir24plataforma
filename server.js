@@ -22,6 +22,8 @@ const FALLBACK_HASH = "e260eb5c451c4702ca7b611408f2aff4125c08384d012ce6f158a0c51
 const TARIFA_COMPANIA = Object.freeze({ movida: 43989, km: 1199, moneda: "ARS", configured: true });
 const TARIFA_PARTICULAR = Object.freeze({ movida: 60000, km: 2000, moneda: "ARS", configured: true });
 const TARIFAS = Object.freeze({ COMPANIA: TARIFA_COMPANIA, PARTICULAR: TARIFA_PARTICULAR });
+const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
+const GMAIL_EXPECTED_ACCOUNT = process.env.GMAIL_ACCOUNT || "asistir24operadores@gmail.com";
 
 function tarifaPorTipoCliente(tipoCliente) {
   return String(tipoCliente || "").toUpperCase() === "PARTICULAR" ? TARIFAS.PARTICULAR : TARIFAS.COMPANIA;
@@ -108,6 +110,89 @@ function auth(req, res, next) {
   catch { return res.status(401).json({ error: "Sesion vencida o token invalido" }); }
 }
 
+function gmailConfigured() {
+  return Boolean(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET && process.env.GMAIL_REDIRECT_URI);
+}
+
+function gmailEncryptionKey() {
+  return crypto.createHash("sha256").update("asistir24:gmail:" + JWT_SECRET).digest();
+}
+
+function encryptSecret(value) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", gmailEncryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(String(value), "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [iv.toString("base64url"), tag.toString("base64url"), encrypted.toString("base64url")].join(".");
+}
+
+function decryptSecret(value) {
+  const [ivText, tagText, encryptedText] = String(value || "").split(".");
+  if (!ivText || !tagText || !encryptedText) throw new Error("Credencial de Gmail inválida");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", gmailEncryptionKey(), Buffer.from(ivText, "base64url"));
+  decipher.setAuthTag(Buffer.from(tagText, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(encryptedText, "base64url")), decipher.final()]).toString("utf8");
+}
+
+function readGmailConnection() {
+  const data = readData();
+  return data.gmail && typeof data.gmail === "object" ? data.gmail : null;
+}
+
+function writeGmailConnection(connection) {
+  const data = readData();
+  if (connection) data.gmail = connection;
+  else delete data.gmail;
+  writeData(data);
+}
+
+async function exchangeGmailCode(code) {
+  const body = new URLSearchParams({
+    code,
+    client_id: process.env.GMAIL_CLIENT_ID,
+    client_secret: process.env.GMAIL_CLIENT_SECRET,
+    redirect_uri: process.env.GMAIL_REDIRECT_URI,
+    grant_type: "authorization_code"
+  });
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error_description || data.error || "Google no pudo completar la autorización");
+  return data;
+}
+
+async function gmailProfile(accessToken) {
+  const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+    headers: { Authorization: "Bearer " + accessToken }
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || "No se pudo validar la cuenta de Gmail");
+  return data;
+}
+
+async function refreshGmailAccessToken() {
+  const connection = readGmailConnection();
+  if (!connection?.refreshToken) throw new Error("Gmail todavía no está conectado");
+  const refreshToken = decryptSecret(connection.refreshToken);
+  const body = new URLSearchParams({
+    client_id: process.env.GMAIL_CLIENT_ID,
+    client_secret: process.env.GMAIL_CLIENT_SECRET,
+    refresh_token: refreshToken,
+    grant_type: "refresh_token"
+  });
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body
+  });
+  const data = await response.json();
+  if (!response.ok || !data.access_token) throw new Error(data.error_description || data.error || "No se pudo renovar el acceso a Gmail");
+  return data.access_token;
+}
+
 function asKm(value) {
   const n = Number(value);
   return Number.isFinite(n) && n >= 0 ? n : null;
@@ -133,7 +218,7 @@ function ensureFacturacion(cotizacion) {
 cotizaciones.forEach(ensureFacturacion);
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: basesDoc.bases.length, version: "facturacion-1" });
+  res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: basesDoc.bases.length, version: "gmail-oauth-1" });
 });
 
 app.post(["/login", "/api/login"], (req, res) => {
@@ -189,6 +274,87 @@ app.delete("/api/users/:id", auth, adminOnly, (req, res) => {
   if (String(users[index].id) === String(req.user.id)) return res.status(400).json({ error: "No puede eliminar su propio usuario" });
   const [removed] = users.splice(index, 1); writeUsers(users);
   res.json({ success: true, user: publicUser(removed) });
+});
+
+app.get("/api/gmail/status", auth, adminOnly, async (req, res) => {
+  const connection = readGmailConnection();
+  const result = {
+    configured: gmailConfigured(),
+    connected: Boolean(connection?.refreshToken),
+    email: connection?.email || null,
+    connectedAt: connection?.connectedAt || null,
+    scope: GMAIL_SCOPE
+  };
+  if (result.connected && gmailConfigured()) {
+    try {
+      const accessToken = await refreshGmailAccessToken();
+      const profile = await gmailProfile(accessToken);
+      result.email = profile.emailAddress || result.email;
+      result.verified = true;
+    } catch (error) {
+      result.verified = false;
+      result.error = error.message;
+    }
+  }
+  res.json(result);
+});
+
+app.get("/api/gmail/oauth/start", auth, adminOnly, (req, res) => {
+  if (!gmailConfigured()) return res.status(503).json({ error: "Faltan variables OAuth de Gmail en Railway" });
+  const state = jwt.sign({ purpose: "gmail-oauth", user: req.user.user }, JWT_SECRET, { expiresIn: "10m" });
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.searchParams.set("client_id", process.env.GMAIL_CLIENT_ID);
+  url.searchParams.set("redirect_uri", process.env.GMAIL_REDIRECT_URI);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", GMAIL_SCOPE);
+  url.searchParams.set("access_type", "offline");
+  url.searchParams.set("prompt", "consent");
+  url.searchParams.set("include_granted_scopes", "true");
+  url.searchParams.set("login_hint", GMAIL_EXPECTED_ACCOUNT);
+  url.searchParams.set("state", state);
+  res.json({ authorizationUrl: url.toString(), account: GMAIL_EXPECTED_ACCOUNT });
+});
+
+app.get("/api/gmail/oauth/callback", async (req, res) => {
+  try {
+    if (req.query.error) throw new Error("Google rechazó la autorización: " + req.query.error);
+    const code = String(req.query.code || "");
+    const state = String(req.query.state || "");
+    if (!code || !state) return res.status(400).send("Faltan datos de autorización de Google.");
+    const stateData = jwt.verify(state, JWT_SECRET);
+    if (stateData.purpose !== "gmail-oauth") throw new Error("Estado OAuth inválido");
+    if (!gmailConfigured()) throw new Error("OAuth de Gmail no está configurado en Railway");
+
+    const tokens = await exchangeGmailCode(code);
+    if (!tokens.access_token) throw new Error("Google no devolvió un token de acceso");
+    const profile = await gmailProfile(tokens.access_token);
+    const email = String(profile.emailAddress || "").toLowerCase();
+    if (!email) throw new Error("Google no informó la cuenta autorizada");
+    if (GMAIL_EXPECTED_ACCOUNT && email !== GMAIL_EXPECTED_ACCOUNT.toLowerCase()) {
+      throw new Error("Se autorizó " + email + ", pero debe conectarse " + GMAIL_EXPECTED_ACCOUNT);
+    }
+
+    const previous = readGmailConnection();
+    let refreshToken = tokens.refresh_token ? encryptSecret(tokens.refresh_token) : previous?.refreshToken;
+    if (!refreshToken) throw new Error("Google no devolvió refresh token. Revocá el acceso anterior y volvé a autorizar.");
+
+    writeGmailConnection({
+      email,
+      refreshToken,
+      scope: tokens.scope || GMAIL_SCOPE,
+      connectedAt: new Date().toISOString(),
+      connectedBy: stateData.user || "admin"
+    });
+    res.redirect("/admin?gmail=connected");
+  } catch (error) {
+    console.error("[Asistir24] Error OAuth Gmail:", error.message);
+    res.status(400).send("No se pudo conectar Gmail: " + String(error.message || "Error desconocido"));
+  }
+});
+
+app.post("/api/gmail/disconnect", auth, adminOnly, (req, res) => {
+  writeGmailConnection(null);
+  res.json({ success: true, connected: false });
 });
 
 app.get("/api/config", auth, (req, res) => {
