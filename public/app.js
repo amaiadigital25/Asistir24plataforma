@@ -38,32 +38,8 @@ function routeLabel(modalidad, tipoServicio) {
 const DISPATCH_WHATSAPP = "5491126433243";
 
 function dispatchWhatsappUrl(q) {
-  const modalidad = q.base?.modalidad === "INTERIOR" ? "Interior" : "CABA / AMBA";
-  const auxilio = isAuxilioMecanico(q.tipoServicio);
-  const recorrido = auxilio
-    ? `Base → Origen: ${Number(q.tramos?.baseOrigen || 0).toFixed(1)} km`
-    : q.base?.modalidad === "INTERIOR"
-      ? `Base → Origen: ${Number(q.tramos?.baseOrigen || 0).toFixed(1)} km | Origen → Destino: ${Number(q.tramos?.origenDestino || 0).toFixed(1)} km | Destino → Base: ${Number(q.tramos?.destinoBase || 0).toFixed(1)} km`
-      : `Base → Origen: ${Number(q.tramos?.baseOrigen || 0).toFixed(1)} km | Origen → Destino: ${Number(q.tramos?.origenDestino || 0).toFixed(1)} km`;
-
-  const lines = [
-    "ASISTIR24 - DESPACHO DE SERVICIO",
-    "",
-    `Tipo de cliente: ${tipoClienteLabel(q.tipoCliente)}`,
-    `Empresa / cliente: ${q.empresa || "-"}`,
-    `Nº de servicio: ${q.numeroServicio || "-"}`,
-    `Patente: ${q.patente || "-"}`,
-    `Tipo de servicio: ${q.tipoServicio || "-"}`,
-    `Base asignada: ${q.base?.base || "-"} - ${q.base?.prestador || "-"}`,
-    `Modalidad: ${modalidad}`,
-    `Origen: ${q.origen || "-"}`,
-    ...(!auxilio ? [`Destino: ${q.destino || "-"}`] : []),
-    `Recorrido: ${recorrido}`,
-    `Km totales: ${Number(q.kmTotal || 0).toFixed(1)} km`,
-    `ID cotización: ${q.id || "-"}`
-  ];
-
-  return `https://wa.me/${DISPATCH_WHATSAPP}?text=${encodeURIComponent(lines.join("\n"))}`;
+  const texto = q.remito?.texto || "ASISTIR24 - REMITO DE SERVICIO";
+  return `https://wa.me/${DISPATCH_WHATSAPP}?text=${encodeURIComponent(texto)}`;
 }
 
 function billingLabel(estado) {
@@ -73,6 +49,21 @@ function billingLabel(estado) {
     FACTURADO: "Facturado",
     COBRADO: "Cobrado"
   })[estado] || "Pendiente";
+}
+
+function workflowLabel(estado) {
+  return ({
+    MAIL_RECIBIDO: "Mail recibido",
+    PROCESANDO: "Procesando",
+    COTIZACION_LISTA: "Cotización lista",
+    REMITO_LISTO: "Remito listo",
+    ESPERANDO_CONFIRMACION: "Esperando confirmación",
+    CONFIRMADO: "Confirmado",
+    LISTO_PARA_WHATSAPP: "Listo para WhatsApp",
+    ENVIADO_WHATSAPP: "Enviado por WhatsApp",
+    EN_SERVICIO: "En servicio",
+    FINALIZADO: "Finalizado"
+  })[estado] || "Esperando confirmación";
 }
 
 function tipoClienteLabel(value) {
@@ -202,7 +193,7 @@ async function loadStats() {
 
 async function loadQuotes() {
   const data = await api("/api/cotizaciones");
-  $("quoteRows").innerHTML = data.items.map(q => `<tr><td>${dateTime(q.fecha)}</td><td>${q.id}</td><td>${tipoClienteLabel(q.tipoCliente)}</td><td>${q.empresa || "-"}</td><td>${q.numeroServicio || "-"}</td><td>${q.patente || "-"}</td><td>${q.base.base} - ${q.base.prestador}</td><td>${Number(q.kmTotal || 0).toFixed(1)}</td><td><strong>${ars(q.total)}</strong></td><td>${billingLabel(q.facturacion?.estado)}</td></tr>`).join("") || `<tr><td colspan="10" class="muted">Todavía no hay cotizaciones.</td></tr>`;
+  $("quoteRows").innerHTML = data.items.map(q => `<tr><td>${dateTime(q.fecha)}</td><td>${q.id}<br><small>${workflowLabel(q.flujo?.estado)}</small></td><td>${tipoClienteLabel(q.tipoCliente)}</td><td>${q.empresa || "-"}</td><td>${q.numeroServicio || "-"}</td><td>${q.patente || "-"}</td><td>${q.base.base} - ${q.base.prestador}</td><td>${Number(q.kmTotal || 0).toFixed(1)}</td><td><strong>${ars(q.total)}</strong></td><td>${billingLabel(q.facturacion?.estado)}</td></tr>`).join("") || `<tr><td colspan="10" class="muted">Todavía no hay cotizaciones.</td></tr>`;
 }
 
 async function refreshDashboardData() {
@@ -291,7 +282,7 @@ $("quoteForm").addEventListener("submit", async e => {
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify(payload)
     });
-    result.innerHTML = `<div class="result-grid"><div><span>Tipo de cliente</span><strong>${tipoClienteLabel(q.tipoCliente)}</strong></div><div><span>Servicio</span><strong>${q.numeroServicio}</strong></div><div><span>Empresa</span><strong>${q.empresa}</strong></div><div><span>Patente</span><strong>${q.patente}</strong></div><div><span>Km totales</span><strong>${q.kmTotal.toFixed(1)} km</strong></div><div><span>Movida</span><strong>${ars(q.tarifa.movida)}</strong></div><div><span>Kilómetros</span><strong>${ars(q.subtotalKm)}</strong></div><div class="total"><span>Total</span><strong>${ars(q.total)}</strong></div><div><span>Facturación</span><strong>Pendiente</strong></div><div><span>ID</span><strong>${q.id}</strong></div></div><div style="margin-top:16px"><a class="btn primary" href="${dispatchWhatsappUrl(q)}" target="_blank" rel="noopener noreferrer">Enviar servicio por WhatsApp a Despacho</a></div>`;
+    result.innerHTML = `<div class="result-grid"><div><span>Tipo de cliente</span><strong>${tipoClienteLabel(q.tipoCliente)}</strong></div><div><span>Servicio</span><strong>${q.numeroServicio}</strong></div><div><span>Empresa</span><strong>${q.empresa}</strong></div><div><span>Patente</span><strong>${q.patente}</strong></div><div><span>Km totales</span><strong>${q.kmTotal.toFixed(1)} km</strong></div><div><span>Movida</span><strong>${ars(q.tarifa.movida)}</strong></div><div><span>Kilómetros</span><strong>${ars(q.subtotalKm)}</strong></div><div class="total"><span>Total</span><strong>${ars(q.total)}</strong></div><div><span>Estado</span><strong>${workflowLabel(q.flujo?.estado)}</strong></div><div><span>ID</span><strong>${q.id}</strong></div></div><div style="margin-top:16px" class="notice"><strong>Cotización y remito guardados.</strong><br>El servicio queda esperando confirmación. WhatsApp todavía no está habilitado.</div><div style="margin-top:12px"><span class="muted">Remito preparado:</span><pre style="white-space:pre-wrap">${q.remito?.texto || "Remito preparado"}</pre></div>`;
     await Promise.all([loadStats(), loadQuotes()]);
   } catch (err) {
     result.innerHTML = `<span class="error">${err.message}</span>`;

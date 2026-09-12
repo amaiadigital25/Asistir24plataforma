@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 const basesDoc = require("./data/bases.json");
+const { ensureWorkflow, cambiarEstado, buildRemito } = require("./src/workflow");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -130,10 +131,14 @@ function ensureFacturacion(cotizacion) {
   return cotizacion.facturacion;
 }
 
-cotizaciones.forEach(ensureFacturacion);
+cotizaciones.forEach(item => {
+  ensureFacturacion(item);
+  ensureWorkflow(item);
+  if (!item.remito || typeof item.remito !== "object") item.remito = buildRemito(item);
+});
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: basesDoc.bases.length, version: "facturacion-1" });
+  res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: basesDoc.bases.length, version: "workflow-1" });
 });
 
 app.post(["/login", "/api/login"], (req, res) => {
@@ -314,9 +319,10 @@ app.post("/api/cotizar", auth, (req, res) => {
   const kmTotal = esAuxilioMecanico ? k1 : (modalidadCotizacion === "INTERIOR" ? k1 + k2 + k3 : k1 + k2);
   const subtotalKm = Math.round(kmTotal * tarifaCotizacion.km);
   const total = Math.round(tarifaCotizacion.movida + subtotalKm);
+  const fecha = new Date().toISOString();
 
   const cotizacion = {
-    id: "COT-" + Date.now(), fecha: new Date().toISOString(), operador: req.user.user,
+    id: "COT-" + Date.now(), fecha, operador: req.user.user,
     empresa: empresaTexto, numeroServicio: servicioTexto, patente: patenteTexto, tipoCliente: tipoClienteCotizacion,
     base: { id: base.id, prestador: base.prestador, base: base.base, zona: base.zona, modalidad: modalidadCotizacion },
     tipoServicio: tipoServicio || "Semipesado", origen: String(origen || "").trim(), destino: esAuxilioMecanico ? "" : String(destino || "").trim(),
@@ -331,8 +337,29 @@ app.post("/api/cotizar", auth, (req, res) => {
       observaciones: "",
       updatedAt: null,
       updatedBy: null
+    },
+    flujo: {
+      estado: "ESPERANDO_CONFIRMACION",
+      mailRecibidoAt: null,
+      cotizacionListaAt: fecha,
+      remitoListoAt: fecha,
+      confirmadoAt: null,
+      confirmadoBy: null,
+      whatsappListoAt: null,
+      whatsappEnviadoAt: null,
+      whatsappEnviadoBy: null,
+      enServicioAt: null,
+      finalizadoAt: null,
+      updatedAt: fecha,
+      updatedBy: req.user.user,
+      historial: [
+        { fecha, desde: "PROCESANDO", hacia: "COTIZACION_LISTA", usuario: req.user.user, detalle: "Cotizacion calculada y guardada" },
+        { fecha, desde: "COTIZACION_LISTA", hacia: "REMITO_LISTO", usuario: req.user.user, detalle: "Remito preparado sin importes" },
+        { fecha, desde: "REMITO_LISTO", hacia: "ESPERANDO_CONFIRMACION", usuario: req.user.user, detalle: "Esperando confirmacion antes de habilitar WhatsApp" }
+      ]
     }
   };
+  cotizacion.remito = buildRemito(cotizacion);
   cotizaciones.unshift(cotizacion);
   cotizaciones = cotizaciones.slice(0, 5000);
   saveCollection("cotizaciones", cotizaciones);
@@ -340,8 +367,51 @@ app.post("/api/cotizar", auth, (req, res) => {
 });
 
 app.get("/api/cotizaciones", auth, (req, res) => {
-  cotizaciones.forEach(ensureFacturacion);
+  cotizaciones.forEach(item => {
+    ensureFacturacion(item);
+    ensureWorkflow(item);
+    if (!item.remito || typeof item.remito !== "object") item.remito = buildRemito(item);
+  });
   res.json({ total: cotizaciones.length, items: cotizaciones });
+});
+
+app.get("/api/cotizaciones/:id", auth, (req, res) => {
+  const cotizacion = cotizaciones.find(item => item.id === req.params.id);
+  if (!cotizacion) return res.status(404).json({ error: "Cotizacion no encontrada" });
+  ensureFacturacion(cotizacion);
+  ensureWorkflow(cotizacion);
+  if (!cotizacion.remito || typeof cotizacion.remito !== "object") cotizacion.remito = buildRemito(cotizacion);
+  res.json(cotizacion);
+});
+
+app.post("/api/cotizaciones/:id/confirmar", auth, (req, res) => {
+  const cotizacion = cotizaciones.find(item => item.id === req.params.id);
+  if (!cotizacion) return res.status(404).json({ error: "Cotizacion no encontrada" });
+  const flujo = ensureWorkflow(cotizacion);
+  if (["ENVIADO_WHATSAPP", "EN_SERVICIO", "FINALIZADO"].includes(flujo.estado)) {
+    return res.status(409).json({ error: "La cotizacion ya avanzo mas alla de la confirmacion" });
+  }
+  cambiarEstado(cotizacion, "CONFIRMADO", req.user.user, String(req.body?.detalle || "Confirmacion recibida"));
+  cotizacion.flujo.confirmadoAt = cotizacion.flujo.updatedAt;
+  cotizacion.flujo.confirmadoBy = req.user.user;
+  cambiarEstado(cotizacion, "LISTO_PARA_WHATSAPP", req.user.user, "Servicio habilitado para envio manual por WhatsApp");
+  cotizacion.flujo.whatsappListoAt = cotizacion.flujo.updatedAt;
+  saveCollection("cotizaciones", cotizaciones);
+  res.json({ success: true, cotizacion });
+});
+
+app.post("/api/cotizaciones/:id/marcar-whatsapp-enviado", auth, (req, res) => {
+  const cotizacion = cotizaciones.find(item => item.id === req.params.id);
+  if (!cotizacion) return res.status(404).json({ error: "Cotizacion no encontrada" });
+  const flujo = ensureWorkflow(cotizacion);
+  if (flujo.estado !== "LISTO_PARA_WHATSAPP") {
+    return res.status(409).json({ error: "WhatsApp solo puede marcarse enviado despues de recibir la confirmacion" });
+  }
+  cambiarEstado(cotizacion, "ENVIADO_WHATSAPP", req.user.user, String(req.body?.detalle || "Remito enviado manualmente por WhatsApp"));
+  cotizacion.flujo.whatsappEnviadoAt = cotizacion.flujo.updatedAt;
+  cotizacion.flujo.whatsappEnviadoBy = req.user.user;
+  saveCollection("cotizaciones", cotizaciones);
+  res.json({ success: true, cotizacion });
 });
 
 app.get("/api/facturacion", auth, adminOnly, (req, res) => {
