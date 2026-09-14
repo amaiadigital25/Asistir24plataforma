@@ -1,3 +1,4 @@
+// Asistir24 maps fallback: OpenStreetMap geocoding + OSRM routing.
 const nativeFetch = global.fetch;
 
 if (typeof nativeFetch !== "function") {
