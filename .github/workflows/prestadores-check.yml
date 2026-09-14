@@ -1,0 +1,36 @@
+name: Prestadores production check
+on:
+  push:
+    branches: [feat/prestadores-facturacion]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Check JavaScript syntax
+        run: |
+          node --check start-prestadores.js
+          node --check src/prestadores-runtime/index.js
+          node --check src/prestadores-guard.js
+          node --check public/prestador.js
+          node --check public/prestadores-revision.js
+      - name: Check generated server syntax and provider isolation
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const {patchServerSource}=require('./src/prestadores-runtime');
+          const {patchProviderGuard}=require('./src/prestadores-guard');
+          const output=patchProviderGuard(patchServerSource(fs.readFileSync('server.js','utf8')));
+          new Function(output);
+          if(!output.includes('SERVICIO_YA_FACTURADO')) throw new Error('Falta validación anti-duplicado');
+          if(!output.includes('Acceso de prestador limitado al módulo de facturación')) throw new Error('Falta aislamiento del rol prestador');
+          if(!output.includes('/api/prestadores/facturas')) throw new Error('Faltan endpoints de facturación');
+          console.log('Provider billing checks OK');
+          NODE

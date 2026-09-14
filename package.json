@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node bootstrap.js"
+    "start": "node start-prestadores.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
