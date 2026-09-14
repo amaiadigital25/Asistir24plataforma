@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const Module = require("module");
+const { patchServerSource } = require("./src/prestadores-runtime");
 
 const dataFile = process.env.DATA_FILE || path.join(__dirname, "database.json");
 const legacyFile = path.join(__dirname, "database.json");
@@ -123,6 +124,8 @@ function loadServerWithRuntimeFixes() {
   } else {
     console.warn("[Asistir24] No se encontró quoteFromMail para aplicar desacople de remito");
   }
+
+  fixed = patchServerSource(fixed);
 
   const serverModule = new Module(serverPath, module);
   serverModule.filename = serverPath;
