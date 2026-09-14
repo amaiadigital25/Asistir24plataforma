@@ -1,10 +1,10 @@
 // Asistir24 routing without Google dependency.
-// Geocoding: coordinates -> Georef Argentina -> Nominatim -> Photon. Routing: OSRM.
+// Geocoding: coordinates -> Georef Argentina (direcciones/localidades) -> Nominatim -> Photon. Routing: OSRM.
 const nativeFetch = global.fetch;
 
 if (typeof nativeFetch !== "function") throw new Error("Asistir24 maps requiere Node.js con fetch global");
 
-const USER_AGENT = process.env.OSM_USER_AGENT || "Asistir24/1.2 (operaciones@asistir24.com.ar)";
+const USER_AGENT = process.env.OSM_USER_AGENT || "Asistir24/1.3 (operaciones@asistir24.com.ar)";
 const REQUEST_TIMEOUT_MS = Math.max(3000, Number(process.env.MAPS_TIMEOUT_MS || 10000));
 const NOMINATIM_URL = process.env.NOMINATIM_URL || "https://nominatim.openstreetmap.org";
 const PHOTON_URL = process.env.PHOTON_URL || "https://photon.komoot.io";
@@ -62,15 +62,42 @@ function addressVariants(address) {
     [/\bLomas de Zamora\b/gi, "Lomas de Zamora, Buenos Aires"],
     [/\bGarin\b/gi, "Garín, Escobar, Buenos Aires"],
     [/\bJose C\.? Paz\b/gi, "José C. Paz, Buenos Aires"],
-    [/\bJose Leon Suarez\b/gi, "José León Suárez, San Martín, Buenos Aires"]
+    [/\bJose Leon Suarez\b/gi, "José León Suárez, General San Martín, Buenos Aires"],
+    [/\bValentin Alsina\b/gi, "Valentín Alsina, Lanús, Buenos Aires"],
+    [/\bVilla Tesei\b/gi, "Villa Tesei, Hurlingham, Buenos Aires"],
+    [/\bEl Pato\b/gi, "El Pato, Berazategui, Buenos Aires"],
+    [/\bBurzaco\b/gi, "Burzaco, Almirante Brown, Buenos Aires"],
+    [/\bDevoto\b/gi, "Villa Devoto, Ciudad Autónoma de Buenos Aires"],
+    [/\bCABA\b/gi, "Ciudad Autónoma de Buenos Aires"],
+    [/\bZarate\b/gi, "Zárate, Buenos Aires"],
+    [/\bJunin\b/gi, "Junín, Buenos Aires"],
+    [/\bOlavarria\b/gi, "Olavarría, Buenos Aires"],
+    [/\bBahia Blanca\b/gi, "Bahía Blanca, Buenos Aires"],
+    [/\bMar de Ajo\b/gi, "Mar de Ajó, Buenos Aires"],
+    [/\bJose C Paz\b/gi, "José C. Paz, Buenos Aires"]
   ];
   for (const [pattern, replacement] of aliases) {
-    if (pattern.test(original)) variants.push(cleanAddress(original.replace(pattern, replacement)));
+    pattern.lastIndex = 0;
+    if (pattern.test(original)) {
+      pattern.lastIndex = 0;
+      variants.push(cleanAddress(original.replace(pattern, replacement)));
+    }
   }
   const parts = original.split(",").map(v => v.trim()).filter(Boolean);
   if (parts.length > 2) variants.push(parts.slice(0, 3).join(", "));
   if (parts.length > 1) variants.push(parts.slice(-3).join(", "));
   return [...new Set(variants.filter(Boolean))];
+}
+function localityCandidate(address) {
+  const text = cleanAddress(address).replace(/,?\s*argentina\s*$/i, "");
+  const parts = text.split(",").map(v => v.trim()).filter(Boolean);
+  if (!parts.length) return "";
+  const first = parts[0]
+    .replace(/\b(av(?:enida)?|calle|ruta|rn|rp)\.?\s*/gi, "")
+    .replace(/\b\d+[a-z]?\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return first || parts[0];
 }
 async function georefGeocode(address) {
   const normalized = cleanAddress(address).replace(/,?\s*argentina\s*$/i, "");
@@ -79,12 +106,39 @@ async function georefGeocode(address) {
   url.searchParams.set("direccion", normalized);
   url.searchParams.set("max", "5");
   const response = await fetchWithTimeout(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error(`Georef HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`Georef direcciones HTTP ${response.status}`);
   const data = await response.json();
   const items = Array.isArray(data?.direcciones) ? data.direcciones : [];
   const best = items.find(item => validArgentinaPoint(Number(item?.ubicacion?.lat), Number(item?.ubicacion?.lon)));
-  if (!best) throw new Error("Georef sin resultado");
+  if (!best) throw new Error("Georef direcciones sin resultado");
   return { lat: Number(best.ubicacion.lat), lng: Number(best.ubicacion.lon), displayName: best.nomenclatura || normalized, provider: "Georef Argentina" };
+}
+async function georefLocalityGeocode(address) {
+  const name = localityCandidate(address);
+  if (!name || name.length < 3) throw new Error("Georef localidades sin nombre");
+  const endpoints = [
+    `${GEOREF_URL.replace(/\/$/, "")}/localidades`,
+    "https://apis.datos.gob.ar/georef/api/localidades"
+  ];
+  let lastError = null;
+  for (const endpoint of endpoints) {
+    try {
+      const url = new URL(endpoint);
+      url.searchParams.set("nombre", name);
+      url.searchParams.set("max", "5");
+      const response = await fetchWithTimeout(url, { headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const items = Array.isArray(data?.localidades) ? data.localidades : [];
+      const best = items.find(item => validArgentinaPoint(Number(item?.centroide?.lat ?? item?.ubicacion?.lat), Number(item?.centroide?.lon ?? item?.ubicacion?.lon)));
+      if (!best) throw new Error("sin resultado");
+      const lat = Number(best?.centroide?.lat ?? best?.ubicacion?.lat);
+      const lng = Number(best?.centroide?.lon ?? best?.ubicacion?.lon);
+      const displayName = [best?.nombre, best?.departamento?.nombre, best?.provincia?.nombre].filter(Boolean).join(", ") || name;
+      return { lat, lng, displayName, provider: "Georef Localidades" };
+    } catch (error) { lastError = error; }
+  }
+  throw new Error(`Georef localidades ${lastError?.message || "sin resultado"}`);
 }
 async function nominatimGeocode(address) {
   const wait = Math.max(0, 1100 - (Date.now() - lastNominatimAt));
@@ -126,7 +180,7 @@ async function geocodeOSM(address) {
   if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey);
   const errors = [];
   for (const variant of addressVariants(address)) {
-    for (const provider of [georefGeocode, nominatimGeocode, photonGeocode]) {
+    for (const provider of [georefGeocode, georefLocalityGeocode, nominatimGeocode, photonGeocode]) {
       try {
         const point = await provider(variant);
         geocodeCache.set(cacheKey, point);
@@ -135,7 +189,7 @@ async function geocodeOSM(address) {
       } catch (error) { errors.push(error.message); }
     }
   }
-  throw new Error(`No se pudo localizar: ${cleanAddress(address)}. ${errors.slice(-6).join(" | ")}`);
+  throw new Error(`No se pudo localizar: ${cleanAddress(address)}. ${errors.slice(-8).join(" | ")}`);
 }
 async function osrmRoute(origin, destination, baseUrl) {
   const coords = `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
@@ -189,4 +243,4 @@ global.fetch = async function patchedFetch(input, init = {}) {
   return nativeFetch(input, init);
 };
 
-console.log("[Asistir24 Maps] Localización robusta activa: coordenadas + Georef + OSM/Photon + OSRM");
+console.log("[Asistir24 Maps] Automatización de localización activa: coordenadas + Georef direcciones/localidades + OSM/Photon + OSRM");
