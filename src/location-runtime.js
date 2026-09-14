@@ -13,7 +13,7 @@ function patchLocationApi(source) {
     '    if (!base) return res.status(400).json({ error: "Base inválida" });',
     '    if (!origenTexto) return res.status(400).json({ error: "Ingrese la ubicación de origen" });',
     '    if (!auxilio && !destinoTexto) return res.status(400).json({ error: "Ingrese el destino" });',
-    '    const baseTexto = [base.base, base.zona, "Argentina"].filter(Boolean).join(", ");',
+    '    const baseTexto = [base.base, "Argentina"].filter(Boolean).join(", ");',
     '    const [baseCoord, origenCoord] = await Promise.all([geocodeGoogle(baseTexto), geocodeGoogle(origenTexto)]);',
     '    const baseOrigen = await routeKmGoogle(baseCoord, origenCoord);',
     '    let origenDestino = 0;',
