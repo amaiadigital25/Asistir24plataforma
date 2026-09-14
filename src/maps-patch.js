@@ -1,33 +1,41 @@
 // Asistir24 routing without Google dependency.
-// Geocoding: Nominatim -> Photon. Routing: OSRM.
-// Public Nominatim is rate-limited deliberately; move endpoints to self-hosted/provider via env when volume grows.
+// Geocoding: coordinates -> Georef Argentina -> Nominatim -> Photon. Routing: OSRM.
 const nativeFetch = global.fetch;
 
-if (typeof nativeFetch !== "function") {
-  throw new Error("Asistir24 maps requiere Node.js con fetch global");
-}
+if (typeof nativeFetch !== "function") throw new Error("Asistir24 maps requiere Node.js con fetch global");
 
-const USER_AGENT = process.env.OSM_USER_AGENT || "Asistir24/1.1 (operaciones@asistir24.com.ar)";
+const USER_AGENT = process.env.OSM_USER_AGENT || "Asistir24/1.2 (operaciones@asistir24.com.ar)";
 const REQUEST_TIMEOUT_MS = Math.max(3000, Number(process.env.MAPS_TIMEOUT_MS || 10000));
 const NOMINATIM_URL = process.env.NOMINATIM_URL || "https://nominatim.openstreetmap.org";
 const PHOTON_URL = process.env.PHOTON_URL || "https://photon.komoot.io";
+const GEOREF_URL = process.env.GEOREF_URL || "https://apis.datos.gob.ar/georef/api/v2.0";
 const OSRM_URLS = String(process.env.OSRM_URLS || "https://router.project-osrm.org,https://routing.openstreetmap.de/routed-car").split(",").map(v => v.trim()).filter(Boolean);
 let lastNominatimAt = 0;
 const geocodeCache = new Map();
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-
 async function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try { return await nativeFetch(url, { ...options, signal: controller.signal }); }
   finally { clearTimeout(timer); }
 }
-
+function validArgentinaPoint(lat, lng) {
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -56 && lat <= -20 && lng >= -74 && lng <= -52;
+}
+function parseCoordinates(value) {
+  const text = String(value || "").trim();
+  const match = text.match(/^\(?\s*(-?\d{1,2}(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*\)?$/);
+  if (!match) return null;
+  const lat = Number(match[1].replace(",", "."));
+  const lng = Number(match[2].replace(",", "."));
+  return validArgentinaPoint(lat, lng) ? { lat, lng, displayName: text, provider: "Coordenadas" } : null;
+}
 function cleanAddress(value) {
   return String(value || "")
     .replace(/\bZONA\s+(NORTE|SUR|OESTE)\b/gi, "")
     .replace(/\bSIN DATO\b/gi, "")
+    .replace(/\bPROVINCIA DE BUENOS AIRES\b(?=\s*,?\s*(SALTA|TUCUMAN|TUCUMÁN|MENDOZA|LA PAMPA|MISIONES|CHACO|SANTA FE|ENTRE RIOS|ENTRE RÍOS|CORDOBA|CÓRDOBA|SANTA CRUZ))/gi, "")
     .replace(/\s+/g, " ")
     .replace(/\s*,\s*/g, ", ")
     .replace(/(?:,\s*){2,}/g, ", ")
@@ -35,22 +43,26 @@ function cleanAddress(value) {
     .replace(/\s*,+\s*$/, "")
     .trim();
 }
-
 function withArgentina(value) {
   const text = cleanAddress(value);
   if (!text) return text;
   return /argentina/i.test(text) ? text : `${text}, Argentina`;
 }
-
 function addressVariants(address) {
   const original = cleanAddress(address);
   const variants = [original];
   const aliases = [
-    [/\bCasanova\b/gi, "Isidro Casanova, La Matanza"],
-    [/\bDon Torcuato\b/gi, "Don Torcuato, Tigre"],
-    [/\bVilla Dominico\b/gi, "Villa Domínico, Avellaneda"],
-    [/\bMoron\b/gi, "Morón"],
-    [/\bGeneral San Martin\b/gi, "General San Martín"]
+    [/\bCasanova\b/gi, "Isidro Casanova, La Matanza, Buenos Aires"],
+    [/\bVarela\b/gi, "Florencio Varela, Buenos Aires"],
+    [/\bDon Torcuato\b/gi, "Don Torcuato, Tigre, Buenos Aires"],
+    [/\bVilla Dominico\b/gi, "Villa Domínico, Avellaneda, Buenos Aires"],
+    [/\bMoron\b/gi, "Morón, Buenos Aires"],
+    [/\bGeneral San Martin\b/gi, "General San Martín, Buenos Aires"],
+    [/\bBerazategui\b/gi, "Berazategui, Buenos Aires"],
+    [/\bLomas de Zamora\b/gi, "Lomas de Zamora, Buenos Aires"],
+    [/\bGarin\b/gi, "Garín, Escobar, Buenos Aires"],
+    [/\bJose C\.? Paz\b/gi, "José C. Paz, Buenos Aires"],
+    [/\bJose Leon Suarez\b/gi, "José León Suárez, San Martín, Buenos Aires"]
   ];
   for (const [pattern, replacement] of aliases) {
     if (pattern.test(original)) variants.push(cleanAddress(original.replace(pattern, replacement)));
@@ -60,7 +72,20 @@ function addressVariants(address) {
   if (parts.length > 1) variants.push(parts.slice(-3).join(", "));
   return [...new Set(variants.filter(Boolean))];
 }
-
+async function georefGeocode(address) {
+  const normalized = cleanAddress(address).replace(/,?\s*argentina\s*$/i, "");
+  if (!normalized) throw new Error("Georef sin dirección");
+  const url = new URL(`${GEOREF_URL.replace(/\/$/, "")}/direcciones`);
+  url.searchParams.set("direccion", normalized);
+  url.searchParams.set("max", "5");
+  const response = await fetchWithTimeout(url, { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error(`Georef HTTP ${response.status}`);
+  const data = await response.json();
+  const items = Array.isArray(data?.direcciones) ? data.direcciones : [];
+  const best = items.find(item => validArgentinaPoint(Number(item?.ubicacion?.lat), Number(item?.ubicacion?.lon)));
+  if (!best) throw new Error("Georef sin resultado");
+  return { lat: Number(best.ubicacion.lat), lng: Number(best.ubicacion.lon), displayName: best.nomenclatura || normalized, provider: "Georef Argentina" };
+}
 async function nominatimGeocode(address) {
   const wait = Math.max(0, 1100 - (Date.now() - lastNominatimAt));
   if (wait) await sleep(wait);
@@ -74,11 +99,10 @@ async function nominatimGeocode(address) {
   const response = await fetchWithTimeout(url, { headers: { "User-Agent": USER_AGENT, "Accept-Language": "es-AR,es;q=0.9" } });
   if (!response.ok) throw new Error(`Nominatim HTTP ${response.status}`);
   const data = await response.json();
-  const best = Array.isArray(data) ? data.find(item => Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon))) : null;
+  const best = Array.isArray(data) ? data.find(item => validArgentinaPoint(Number(item.lat), Number(item.lon))) : null;
   if (!best) throw new Error("Nominatim sin resultado");
-  return { lat: Number(best.lat), lng: Number(best.lon), displayName: best.display_name || "" };
+  return { lat: Number(best.lat), lng: Number(best.lon), displayName: best.display_name || "", provider: "OpenStreetMap" };
 }
-
 async function photonGeocode(address) {
   const url = new URL(`${PHOTON_URL.replace(/\/$/, "")}/api/`);
   url.searchParams.set("q", withArgentina(address));
@@ -92,26 +116,27 @@ async function photonGeocode(address) {
   const coords = arg?.geometry?.coordinates;
   if (!Array.isArray(coords) || coords.length < 2) throw new Error("Photon sin resultado");
   const lng = Number(coords[0]); const lat = Number(coords[1]);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error("Photon devolvió coordenadas inválidas");
-  return { lat, lng, displayName: arg?.properties?.name || "" };
+  if (!validArgentinaPoint(lat, lng)) throw new Error("Photon devolvió coordenadas inválidas");
+  return { lat, lng, displayName: arg?.properties?.name || "", provider: "Photon" };
 }
-
 async function geocodeOSM(address) {
+  const coordinate = parseCoordinates(cleanAddress(address).replace(/,?\s*argentina\s*$/i, ""));
+  if (coordinate) return coordinate;
   const cacheKey = withArgentina(address).toLowerCase();
   if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey);
   const errors = [];
   for (const variant of addressVariants(address)) {
-    for (const provider of [nominatimGeocode, photonGeocode]) {
+    for (const provider of [georefGeocode, nominatimGeocode, photonGeocode]) {
       try {
         const point = await provider(variant);
         geocodeCache.set(cacheKey, point);
+        console.log(`[Asistir24 Maps] ${point.provider || "Geocoder"}: ${cleanAddress(variant)} -> ${point.lat},${point.lng}`);
         return point;
       } catch (error) { errors.push(error.message); }
     }
   }
-  throw new Error(`No se pudo localizar: ${cleanAddress(address)}. ${errors.join(" | ")}`);
+  throw new Error(`No se pudo localizar: ${cleanAddress(address)}. ${errors.slice(-6).join(" | ")}`);
 }
-
 async function osrmRoute(origin, destination, baseUrl) {
   const coords = `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
   const url = `${baseUrl.replace(/\/$/, "")}/route/v1/driving/${coords}?overview=false&steps=false&alternatives=false`;
@@ -122,7 +147,6 @@ async function osrmRoute(origin, destination, baseUrl) {
   if (!Number.isFinite(meters) || meters <= 0) throw new Error("OSRM sin distancia válida");
   return meters;
 }
-
 async function routeOSM(origin, destination) {
   const errors = [];
   for (const baseUrl of OSRM_URLS) {
@@ -131,29 +155,22 @@ async function routeOSM(origin, destination) {
   }
   throw new Error(`No se pudo calcular el recorrido. ${errors.join(" | ")}`);
 }
-
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 }
-
 global.fetch = async function patchedFetch(input, init = {}) {
   const url = typeof input === "string" ? input : input?.url;
-
-  // Keep server.js compatible: intercept its old Google geocode URL, but never call Google.
   if (url && url.startsWith("https://maps.googleapis.com/maps/api/geocode/json")) {
     const parsed = new URL(url);
     const address = parsed.searchParams.get("address") || "";
     try {
       const point = await geocodeOSM(address);
-      console.log(`[Asistir24 Maps] OSM geocodificó: ${cleanAddress(address)} -> ${point.lat},${point.lng}`);
       return jsonResponse({ status: "OK", results: [{ formatted_address: point.displayName, geometry: { location: { lat: point.lat, lng: point.lng } } }] });
     } catch (error) {
       console.error("[Asistir24 Maps] Error geocodificando:", error.message);
       return jsonResponse({ status: "ZERO_RESULTS", results: [], error_message: error.message });
     }
   }
-
-  // Keep server.js compatible: intercept its old Google Routes URL, but route only through OSRM.
   if (url === "https://routes.googleapis.com/directions/v2:computeRoutes") {
     try {
       const body = typeof init.body === "string" ? JSON.parse(init.body) : (init.body || {});
@@ -169,8 +186,7 @@ global.fetch = async function patchedFetch(input, init = {}) {
       return jsonResponse({ error: { message: error.message } }, 503);
     }
   }
-
   return nativeFetch(input, init);
 };
 
-console.log("[Asistir24 Maps] Google desactivado; OpenStreetMap/Photon + OSRM activos");
+console.log("[Asistir24 Maps] Localización robusta activa: coordenadas + Georef + OSM/Photon + OSRM");
