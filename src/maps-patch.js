@@ -25,8 +25,13 @@ async function fetchWithTimeout(url, options = {}) {
 
 function cleanAddress(value) {
   return String(value || "")
+    .replace(/\bZONA\s+(NORTE|SUR|OESTE)\b/gi, "")
+    .replace(/\bSIN DATO\b/gi, "")
     .replace(/\s+/g, " ")
-    .replace(/,\s*,+/g, ",")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/(?:,\s*){2,}/g, ", ")
+    .replace(/^\s*,+\s*/, "")
+    .replace(/\s*,+\s*$/, "")
     .trim();
 }
 
