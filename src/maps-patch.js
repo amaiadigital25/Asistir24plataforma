@@ -1,4 +1,4 @@
-// Asistir24 maps fallback: OpenStreetMap geocoding + OSRM routing.
+// Asistir24 maps fallback: Google Maps first, OpenStreetMap/OSRM only on failure.
 const nativeFetch = global.fetch;
 
 if (typeof nativeFetch !== "function") {
@@ -132,11 +132,23 @@ global.fetch = async function patchedFetch(input, init = {}) {
   const url = typeof input === "string" ? input : input?.url;
 
   if (url && url.startsWith("https://maps.googleapis.com/maps/api/geocode/json")) {
+    try {
+      const googleResponse = await nativeFetch(input, init);
+      const googleData = await googleResponse.clone().json();
+      if (googleResponse.ok && googleData?.status === "OK" && googleData?.results?.[0]) {
+        console.log("[Asistir24 Maps] Google geocoding OK");
+        return googleResponse;
+      }
+      console.warn(`[Asistir24 Maps] Google geocoding no disponible: ${googleData?.status || googleResponse.status}`);
+    } catch (error) {
+      console.warn("[Asistir24 Maps] Google geocoding falló:", error.message);
+    }
+
     const parsed = new URL(url);
     const address = parsed.searchParams.get("address") || "";
     try {
       const point = await geocodeOSM(address);
-      console.log(`[Asistir24 Maps] OSM geocodificó: ${address} -> ${point.lat},${point.lng}`);
+      console.log(`[Asistir24 Maps] OSM geocodificó: ${cleanAddress(address)} -> ${point.lat},${point.lng}`);
       return jsonResponse({
         status: "OK",
         results: [{ formatted_address: point.displayName, geometry: { location: { lat: point.lat, lng: point.lng } } }]
@@ -148,6 +160,19 @@ global.fetch = async function patchedFetch(input, init = {}) {
   }
 
   if (url === "https://routes.googleapis.com/directions/v2:computeRoutes") {
+    try {
+      const googleResponse = await nativeFetch(input, init);
+      const googleData = await googleResponse.clone().json();
+      const meters = Number(googleData?.routes?.[0]?.distanceMeters);
+      if (googleResponse.ok && Number.isFinite(meters) && meters > 0) {
+        console.log("[Asistir24 Maps] Google Routes OK");
+        return googleResponse;
+      }
+      console.warn(`[Asistir24 Maps] Google Routes no disponible: ${googleData?.error?.message || googleResponse.status}`);
+    } catch (error) {
+      console.warn("[Asistir24 Maps] Google Routes falló:", error.message);
+    }
+
     try {
       const body = typeof init.body === "string" ? JSON.parse(init.body) : (init.body || {});
       const o = body?.origin?.location?.latLng;
@@ -169,4 +194,4 @@ global.fetch = async function patchedFetch(input, init = {}) {
   return nativeFetch(input, init);
 };
 
-console.log("[Asistir24 Maps] OpenStreetMap/OSRM fallback activo");
+console.log("[Asistir24 Maps] Google primero; OpenStreetMap/OSRM fallback activo");
