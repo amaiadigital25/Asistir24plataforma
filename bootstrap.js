@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const Module = require("module");
 
 const dataFile = process.env.DATA_FILE || path.join(__dirname, "database.json");
 const legacyFile = path.join(__dirname, "database.json");
@@ -35,5 +36,17 @@ function initializePersistentData() {
   console.log(`[Asistir24] Base persistente nueva creada en ${dataFile}`);
 }
 
+function loadServerWithMailBodyFix() {
+  const serverPath = require.resolve("./server");
+  const source = fs.readFileSync(serverPath, "utf8");
+  const oldLine = 'if (part) return decodeBase64Url(part.body.data).replace(/<[^>]+>/g, " ");';
+  const newLine = 'if (part) { const decoded = decodeBase64Url(part.body.data).replace(/<[^>]+>/g, " "); if (decoded.trim()) return decoded; }';
+  const fixed = source.includes(oldLine) ? source.replace(oldLine, newLine) : source;
+  const serverModule = new Module(serverPath, module);
+  serverModule.filename = serverPath;
+  serverModule.paths = Module._nodeModulePaths(path.dirname(serverPath));
+  serverModule._compile(fixed, serverPath);
+}
+
 initializePersistentData();
-require("./server");
+loadServerWithMailBodyFix();
