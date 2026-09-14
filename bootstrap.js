@@ -40,7 +40,7 @@ function loadServerWithMailBodyFix() {
   const serverPath = require.resolve("./server");
   const source = fs.readFileSync(serverPath, "utf8");
   const oldLine = 'if (part) return decodeBase64Url(part.body.data).replace(/<[^>]+>/g, " ");';
-  const newLine = 'if (part) { const decoded = decodeBase64Url(part.body.data).replace(/<[^>]+>/g, " "); if (decoded.trim()) return decoded; }';
+  const newLine = 'if (part) { const raw = decodeBase64Url(part.body.data); const decoded = mime === "text/html" ? raw.replace(/<br\\s*\\/?\\s*>/gi, "\\n").replace(/<\\/p\\s*>/gi, "\\n").replace(/<\\/li\\s*>/gi, "\\n").replace(/<li\\b[^>]*>/gi, "- ").replace(/<[^>]+>/g, " ") : raw; if (decoded.trim()) return decoded; }';
   const fixed = source.includes(oldLine) ? source.replace(oldLine, newLine) : source;
   const serverModule = new Module(serverPath, module);
   serverModule.filename = serverPath;
