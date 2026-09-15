@@ -37,6 +37,7 @@
         <label>Km Base -> Origen
           <input id="kmBaseOrigen" type="number" step="0.1" min="0" required placeholder="Se calcula automáticamente">
           <button class="btn ghost small" id="calcKmButton" type="button">Calcular kilómetros automáticamente</button>
+          <button class="btn ghost small hidden" id="openRouteMap" type="button" disabled>📍 Abrir ruta en mapa</button>
           <span id="kmStatus" class="muted">Ingrese origen y destino para calcular el recorrido. También puede usar coordenadas.</span>
         </label>
         <label id="kmOriginDestinationWrap">Km Origen -> Destino<input id="kmOrigenDestino" type="number" step="0.1" min="0" required placeholder="Se calcula automáticamente"></label>
@@ -58,7 +59,7 @@
   <section class="card compact"><p class="notice">Cada cotización y su remito quedan guardados. El remito no muestra importes. WhatsApp se habilita recién después de la confirmación del servicio y lo envía manualmente el operador.</p></section>
 </main>
 <script src="/app.js?v=20260914-location1"></script>
-<script src="/auto-km-server.js?v=20260914-location1"></script>
+<script src="/auto-km-server.js?v=20260915-maproute1"></script>
 <script src="/workflow-actions.js?v=20260912-1"></script>
 </body>
 </html>
