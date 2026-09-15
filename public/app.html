@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Asistir24 - Panel operativo</title>
   <link rel="stylesheet" href="/styles.css">
+  <style>
+    /* Listas compactas: conservan todos los registros con scroll interno */
+    #serviciosEntrantes .table-wrap{max-height:330px;overflow:auto}
+    #serviciosEntrantes table th,#serviciosEntrantes table td{padding:7px 9px;font-size:13px;line-height:1.2}
+    #serviciosEntrantes .section-head{margin-bottom:8px}
+    #serviciosEntrantes .muted{margin:3px 0}
+    #serviciosEntrantes thead{position:sticky;top:0;z-index:2;background:var(--card,#fff)}
+    #quoteHistory .table-wrap{max-height:330px;overflow:auto}
+    #quoteHistory table th,#quoteHistory table td{padding:7px 9px;font-size:13px;line-height:1.2}
+    #quoteHistory thead{position:sticky;top:0;z-index:2;background:var(--card,#fff)}
+  </style>
 </head>
 <body>
 <header class="topbar">
@@ -61,7 +72,7 @@
       <div id="baseList" class="base-list"></div>
     </article>
   </section>
-  <section class="card">
+  <section class="card" id="quoteHistory">
     <div class="section-head"><div><p class="eyebrow">HISTORIAL</p><h2>Cotizaciones guardadas</h2></div><button class="btn ghost small" id="refreshQuotes">Actualizar</button></div>
     <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>ID / Estado</th><th>Tipo</th><th>Empresa / Cliente</th><th>Servicio</th><th>Patente</th><th>Base</th><th>Km</th><th>Total</th><th>Facturación</th></tr></thead><tbody id="quoteRows"></tbody></table></div>
   </section>
