@@ -13,6 +13,15 @@
 </header>
 <main class="page">
   <section class="stats" id="stats"></section>
+
+  <section class="card" id="serviciosEntrantes">
+    <div class="section-head">
+      <div><p class="eyebrow">MAIL DE OPERADORES</p><h2>Servicios entrantes</h2><p class="muted">Los servicios recibidos por Gmail aparecen acá con sus datos. Abrí uno para precargar el cotizador.</p></div>
+      <div class="top-actions"><span class="pill" id="incomingCount">0 servicios</span><button class="btn ghost small" id="refreshIncoming" type="button">Actualizar</button></div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Ingreso</th><th>Nº servicio / Estado</th><th>Compañía</th><th>Patente</th><th>Tipo</th><th>Origen</th><th>Destino</th><th>Observaciones</th><th>Acción</th></tr></thead><tbody id="incomingRows"><tr><td colspan="9" class="muted">Cargando servicios...</td></tr></tbody></table></div>
+  </section>
+
   <section class="grid two">
     <article class="card">
       <div class="section-head"><div><p class="eyebrow">COTIZADOR</p><h2>Nueva cotización</h2></div><span class="pill" id="tarifaPill">Cargando tarifa...</span></div>
@@ -61,5 +70,6 @@
 <script src="/app.js?v=20260914-location1"></script>
 <script src="/auto-km-v2.js?v=20260915-exactbase1"></script>
 <script src="/workflow-actions.js?v=20260912-1"></script>
+<script src="/servicios-entrantes.js?v=20260915-1"></script>
 </body>
 </html>
