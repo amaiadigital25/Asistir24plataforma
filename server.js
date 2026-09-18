@@ -52,6 +52,19 @@ function saveCollection(key, items) {
   data[key] = items;
   writeData(data);
 }
+function getBases() {
+  const data = readData();
+  return Array.isArray(data.bases) && data.bases.length ? data.bases : basesDoc.bases;
+}
+function writeBases(bases) {
+  const data = readData();
+  data.bases = bases;
+  writeData(data);
+}
+function baseIdFrom(prestador, base) {
+  const raw = [prestador, base].filter(Boolean).join("-").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return raw || "base-" + Date.now();
+}
 const initialData = readData();
 let cotizaciones = Array.isArray(initialData.cotizaciones) ? initialData.cotizaciones : [];
 let emergencias = Array.isArray(initialData.emergencias) ? initialData.emergencias : [];
@@ -232,12 +245,12 @@ async function getGmailMessage(token, id) {
 }
 function findBaseForAddress(address) {
   const text = String(address || "").toLowerCase();
-  const active = basesDoc.bases.filter(b => b.estado === "ACTIVO");
+  const active = getBases().filter(b => b.estado === "ACTIVO");
   const direct = active.find(b => text.includes(String(b.base || "").toLowerCase())) ||
     active.find(b => text.includes(String(b.zona || "").toLowerCase()));
   if (direct) return direct;
   const interior = /mendoza|cordoba|córdoba|santa fe|entre rios|entre ríos|misiones|chaco|salta|tucuman|tucumán|la pampa|santa cruz/i.test(text);
-  return active.find(b => b.modalidad === (interior ? "INTERIOR" : "AMBA_CABA")) || active[0] || basesDoc.bases[0];
+  return active.find(b => b.modalidad === (interior ? "INTERIOR" : "AMBA_CABA")) || active[0] || getBases()[0];
 }
 async function geocodeGoogle(address) {
   const key = process.env.GOOGLE_MAPS_API_KEY;
@@ -422,7 +435,7 @@ async function pollGmail({ force = false } = {}) {
   }
 }
 
-app.get("/health", (req, res) => res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: basesDoc.bases.length, version: "gmail-workflow-3", gmailAuto: GMAIL_AUTO_ENABLED }));
+app.get("/health", (req, res) => res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: getBases().length, version: "gmail-workflow-3", gmailAuto: GMAIL_AUTO_ENABLED }));
 
 app.post(["/login", "/api/login"], (req, res) => {
   const { username, password } = req.body || {};
@@ -552,7 +565,7 @@ app.get("/api/config", auth, (req, res) => {
 });
 app.post("/api/distancia", auth, async (req, res) => {
   try {
-    const base = basesDoc.bases.find(item => item.id === req.body?.baseId);
+    const base = getBases().find(item => item.id === req.body?.baseId);
     const origenTexto = String(req.body?.origen || "").trim();
     if (!base) return res.status(400).json({ error: "Base inválida" });
     if (!origenTexto) return res.status(400).json({ error: "Ingrese la ubicación de origen" });
@@ -564,9 +577,31 @@ app.post("/api/distancia", auth, async (req, res) => {
     res.status(503).json({ error: error.message || "No se pudo calcular la distancia" });
   }
 });
+app.post("/api/bases", auth, adminOnly, (req, res) => {
+  const { prestador, base, zona, modalidad, estado, tipo, direccion, lat, lng } = req.body || {};
+  if (!String(prestador || "").trim() || !String(base || "").trim()) return res.status(400).json({ error: "Prestador y base son obligatorios" });
+  const items = getBases().slice();
+  let id = baseIdFrom(prestador, base), n = 2;
+  while (items.some(x => x.id === id)) id = baseIdFrom(prestador, base) + "-" + n++;
+  const item = { id, prestador:String(prestador).trim(), base:String(base).trim(), zona:String(zona||"").trim(), modalidad:modalidad==="INTERIOR"?"INTERIOR":"AMBA_CABA", estado:String(estado||"ACTIVO").trim(), tipo:String(tipo||"").trim(), direccion:String(direccion||"").trim(), lat:lat===""||lat==null?null:Number(lat), lng:lng===""||lng==null?null:Number(lng), updatedAt:new Date().toISOString(), updatedBy:req.user.user };
+  items.push(item); writeBases(items); res.status(201).json({ item });
+});
+app.patch("/api/bases/:id", auth, adminOnly, (req, res) => {
+  const items = getBases().slice(), i = items.findIndex(x => x.id === req.params.id);
+  if (i < 0) return res.status(404).json({ error: "Base no encontrada" });
+  const allowed=["prestador","base","zona","modalidad","estado","tipo","direccion","lat","lng"];
+  for (const k of allowed) if (Object.prototype.hasOwnProperty.call(req.body||{},k)) items[i][k]=(k==="lat"||k==="lng")?(req.body[k]===""||req.body[k]==null?null:Number(req.body[k])):String(req.body[k]).trim();
+  items[i].updatedAt=new Date().toISOString(); items[i].updatedBy=req.user.user; writeBases(items); res.json({ item:items[i] });
+});
+app.delete("/api/bases/:id", auth, adminOnly, (req, res) => {
+  const items=getBases().slice(), next=items.filter(x=>x.id!==req.params.id);
+  if(next.length===items.length) return res.status(404).json({error:"Base no encontrada"});
+  writeBases(next); res.json({success:true});
+});
+
 app.get("/api/bases", auth, (req, res) => {
   const { modalidad, estado, q } = req.query;
-  let items = basesDoc.bases.slice();
+  let items = getBases().slice();
   if (modalidad) items = items.filter(b => b.modalidad === modalidad);
   if (estado) items = items.filter(b => b.estado === estado);
   if (q) {
@@ -576,7 +611,7 @@ app.get("/api/bases", auth, (req, res) => {
   res.json({ total: items.length, items });
 });
 app.get("/api/resumen", auth, (req, res) => {
-  const count = key => basesDoc.bases.filter(b => b.modalidad === key).length;
+  const count = key => getBases().filter(b => b.modalidad === key).length;
   const billing = { pendiente: 0, listo: 0, facturado: 0, cobrado: 0 };
   cotizaciones.forEach(item => {
     const estado = ensureFacturacion(item).estado;
@@ -587,11 +622,11 @@ app.get("/api/resumen", auth, (req, res) => {
   });
   res.json({
     bases: {
-      total: basesDoc.bases.length,
+      total: getBases().length,
       ambaCaba: count("AMBA_CABA"),
       interior: count("INTERIOR"),
-      activas: basesDoc.bases.filter(b => b.estado === "ACTIVO").length,
-      pendientes: basesDoc.bases.filter(b => b.estado === "PENDIENTE").length
+      activas: getBases().filter(b => b.estado === "ACTIVO").length,
+      pendientes: getBases().filter(b => b.estado === "PENDIENTE").length
     },
     cotizaciones: cotizaciones.length,
     facturacion: billing,
@@ -601,7 +636,7 @@ app.get("/api/resumen", auth, (req, res) => {
 });
 app.post("/api/cotizar", auth, (req, res) => {
   const { baseId, modalidad, tipoServicio, tipoCliente, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente, asegurado, marca, modelo, color, fechaServicio, condicionServicio, transmision, especificaciones, personasTrasladar, siniestro, enCochera, poseeCarga, vehiculoRueda, tieneTrailer, requiereExtraccion, observaciones } = req.body || {};
-  const base = basesDoc.bases.find(b => b.id === baseId);
+  const base = getBases().find(b => b.id === baseId);
   if (!base) return res.status(400).json({ error: "Base invalida" });
   const modalidadCotizacion = ["AMBA_CABA", "INTERIOR"].includes(modalidad) ? modalidad : base.modalidad;
   const tipoClienteCotizacion = String(tipoCliente || "").toUpperCase() === "PARTICULAR" ? "PARTICULAR" : "COMPANIA";
