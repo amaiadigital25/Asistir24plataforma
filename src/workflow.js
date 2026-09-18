@@ -110,7 +110,7 @@ function buildRemito(cotizacion) {
   ];
 
   return {
-    version: 4,
+    version: 5,
     preparadoAt: nowIso(),
     texto: lines.join("\n"),
     incluyeImportes: false
