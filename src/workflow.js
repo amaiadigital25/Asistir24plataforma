@@ -81,8 +81,6 @@ function buildRemito(cotizacion) {
     "",
     "DATOS DEL ASOCIADO",
     `Asociado: ${datos.asegurado || "-"}`,
-    `Teléfono: ${datos.telefono || "-"}`,
-    `Correo: ${datos.emailAsegurado || "-"}`,
     "",
     "DATOS DEL VEHÍCULO",
     `Patente: ${cotizacion.patente || "-"}`,
@@ -110,7 +108,7 @@ function buildRemito(cotizacion) {
   ];
 
   return {
-    version: 5,
+    version: 6,
     preparadoAt: nowIso(),
     texto: lines.join("\n"),
     incluyeImportes: false
