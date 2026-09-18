@@ -4,6 +4,11 @@ const nativeFetch = global.fetch;
 
 if (typeof nativeFetch !== "function") throw new Error("Asistir24 maps requiere Node.js con fetch global");
 
+// server.js mantiene una validación histórica de esta variable antes de llamar
+// a fetch. El valor local habilita esa ruta; las solicitudes se interceptan más
+// abajo y se resuelven con Georef/OSM/Photon y OSRM, sin enviar esta clave.
+if (!process.env.GOOGLE_MAPS_API_KEY) process.env.GOOGLE_MAPS_API_KEY = "asistir24-osm-fallback";
+
 const USER_AGENT = process.env.OSM_USER_AGENT || "Asistir24/1.3 (operaciones@asistir24.com.ar)";
 const REQUEST_TIMEOUT_MS = Math.max(3000, Number(process.env.MAPS_TIMEOUT_MS || 10000));
 const NOMINATIM_URL = process.env.NOMINATIM_URL || "https://nominatim.openstreetmap.org";
@@ -213,7 +218,7 @@ function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 }
 global.fetch = async function patchedFetch(input, init = {}) {
-  const url = typeof input === "string" ? input : input?.url;
+  const url = typeof input === "string" ? input : (input instanceof URL ? input.toString() : input?.url);
   if (url && url.startsWith("https://maps.googleapis.com/maps/api/geocode/json")) {
     const parsed = new URL(url);
     const address = parsed.searchParams.get("address") || "";
