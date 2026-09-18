@@ -600,7 +600,7 @@ app.get("/api/resumen", auth, (req, res) => {
   });
 });
 app.post("/api/cotizar", auth, (req, res) => {
-  const { baseId, modalidad, tipoServicio, tipoCliente, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente, asegurado, telefono, emailAsegurado, marca, modelo, color, fechaServicio, condicionServicio, transmision, especificaciones, personasTrasladar, siniestro, enCochera, poseeCarga, vehiculoRueda, tieneTrailer, requiereExtraccion, observaciones } = req.body || {};
+  const { baseId, modalidad, tipoServicio, tipoCliente, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente, asegurado, marca, modelo, color, fechaServicio, condicionServicio, transmision, especificaciones, personasTrasladar, siniestro, enCochera, poseeCarga, vehiculoRueda, tieneTrailer, requiereExtraccion, observaciones } = req.body || {};
   const base = basesDoc.bases.find(b => b.id === baseId);
   if (!base) return res.status(400).json({ error: "Base invalida" });
   const modalidadCotizacion = ["AMBA_CABA", "INTERIOR"].includes(modalidad) ? modalidad : base.modalidad;
@@ -610,8 +610,7 @@ app.post("/api/cotizar", auth, (req, res) => {
   const servicioTexto = String(numeroServicio || "").trim();
   const patenteTexto = String(patente || "").trim().toUpperCase();
   const datosAsociado = {
-    asegurado: String(asegurado || "").trim(), telefono: String(telefono || "").trim(),
-    emailAsegurado: String(emailAsegurado || "").trim(), marca: String(marca || "").trim(),
+    asegurado: String(asegurado || "").trim(), marca: String(marca || "").trim(),
     modelo: String(modelo || "").trim(), color: String(color || "").trim(),
     fechaServicio: String(fechaServicio || "").trim(), condicionServicio: String(condicionServicio || "").trim(),
     transmision: String(transmision || "").trim(), especificaciones: String(especificaciones || "").trim(),
@@ -624,8 +623,6 @@ app.post("/api/cotizar", auth, (req, res) => {
   if (!servicioTexto) return res.status(400).json({ error: "Ingrese el numero de servicio" });
   if (!patenteTexto) return res.status(400).json({ error: "Ingrese la patente" });
   if (!datosAsociado.asegurado) return res.status(400).json({ error: "Ingrese el nombre del asociado" });
-  if (!datosAsociado.telefono) return res.status(400).json({ error: "Ingrese el teléfono del asociado" });
-  if (!datosAsociado.emailAsegurado || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(datosAsociado.emailAsegurado)) return res.status(400).json({ error: "Ingrese un correo válido del asociado" });
   if (!datosAsociado.marca) return res.status(400).json({ error: "Ingrese la marca del vehículo" });
   if (!datosAsociado.modelo) return res.status(400).json({ error: "Ingrese el modelo del vehículo" });
   if (!datosAsociado.color) return res.status(400).json({ error: "Ingrese el color del vehículo" });
