@@ -318,6 +318,18 @@ async function quoteFromMail(parsed, gmailMeta) {
       marca: parsed.marca || "",
       modelo: parsed.modelo || "",
       color: parsed.color || "",
+      fechaServicio: parsed.fechaServicio || "",
+      condicionServicio: parsed.condicionServicio || "",
+      transmision: parsed.transmision || "",
+      especificaciones: parsed.especificaciones || "",
+      personasTrasladar: parsed.personasTrasladar || "",
+      siniestro: parsed.siniestro || "",
+      enCochera: parsed.enCochera || "",
+      poseeCarga: parsed.poseeCarga || "",
+      vehiculoRueda: parsed.vehiculoRueda || "",
+      tieneTrailer: parsed.tieneTrailer || "",
+      requiereExtraccion: parsed.requiereExtraccion || "",
+      informacionTecnica: parsed.informacionTecnica || "",
       observaciones: parsed.observaciones || "",
       asegurado: parsed.asegurado || "",
       telefono: parsed.telefono || "",
@@ -588,7 +600,7 @@ app.get("/api/resumen", auth, (req, res) => {
   });
 });
 app.post("/api/cotizar", auth, (req, res) => {
-  const { baseId, modalidad, tipoServicio, tipoCliente, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente, asegurado, telefono, emailAsegurado, marca, modelo, color } = req.body || {};
+  const { baseId, modalidad, tipoServicio, tipoCliente, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente, asegurado, telefono, emailAsegurado, marca, modelo, color, fechaServicio, condicionServicio, transmision, especificaciones, personasTrasladar, siniestro, enCochera, poseeCarga, vehiculoRueda, tieneTrailer, requiereExtraccion, observaciones } = req.body || {};
   const base = basesDoc.bases.find(b => b.id === baseId);
   if (!base) return res.status(400).json({ error: "Base invalida" });
   const modalidadCotizacion = ["AMBA_CABA", "INTERIOR"].includes(modalidad) ? modalidad : base.modalidad;
@@ -600,7 +612,13 @@ app.post("/api/cotizar", auth, (req, res) => {
   const datosAsociado = {
     asegurado: String(asegurado || "").trim(), telefono: String(telefono || "").trim(),
     emailAsegurado: String(emailAsegurado || "").trim(), marca: String(marca || "").trim(),
-    modelo: String(modelo || "").trim(), color: String(color || "").trim()
+    modelo: String(modelo || "").trim(), color: String(color || "").trim(),
+    fechaServicio: String(fechaServicio || "").trim(), condicionServicio: String(condicionServicio || "").trim(),
+    transmision: String(transmision || "").trim(), especificaciones: String(especificaciones || "").trim(),
+    personasTrasladar: String(personasTrasladar || "0").trim(), siniestro: String(siniestro || "").trim(),
+    enCochera: String(enCochera || "").trim(), poseeCarga: String(poseeCarga || "").trim(),
+    vehiculoRueda: String(vehiculoRueda || "").trim(), tieneTrailer: String(tieneTrailer || "").trim(),
+    requiereExtraccion: String(requiereExtraccion || "").trim(), observaciones: String(observaciones || "").trim()
   };
   if (!empresaTexto) return res.status(400).json({ error: "Ingrese la empresa o cliente" });
   if (!servicioTexto) return res.status(400).json({ error: "Ingrese el numero de servicio" });

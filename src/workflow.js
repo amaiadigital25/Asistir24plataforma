@@ -61,7 +61,7 @@ function cambiarEstado(cotizacion, estado, usuario, detalle = "") {
 
 function buildRemito(cotizacion) {
   const datos = cotizacion.datosMail || {};
-  const auxilio = String(cotizacion.tipoServicio || "").toLowerCase().replace(/á/g, "a") === "auxilio mecanico";
+  const auxilio = String(cotizacion.tipoServicio || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("auxilio mecanico");
   const interior = cotizacion.base?.modalidad === "INTERIOR";
   const recorrido = auxilio
     ? `Base -> Origen: ${Number(cotizacion.tramos?.baseOrigen || 0).toFixed(1)} km`
@@ -72,16 +72,35 @@ function buildRemito(cotizacion) {
   const lines = [
     "ASISTIR24 - REMITO DE SERVICIO",
     "",
+    "INFORMACIÓN GENERAL",
     `Empresa / cliente: ${cotizacion.empresa || "-"}`,
     `Nº de servicio: ${cotizacion.numeroServicio || "-"}`,
+    `Fecha y hora: ${datos.fechaServicio || cotizacion.fecha || "-"}`,
+    `Condición: ${datos.condicionServicio || "-"}`,
+    `Tipo de servicio: ${cotizacion.tipoServicio || "-"}`,
+    "",
+    "DATOS DEL ASOCIADO",
     `Asociado: ${datos.asegurado || "-"}`,
     `Teléfono: ${datos.telefono || "-"}`,
     `Correo: ${datos.emailAsegurado || "-"}`,
+    "",
+    "DATOS DEL VEHÍCULO",
     `Patente: ${cotizacion.patente || "-"}`,
     `Marca: ${datos.marca || "-"}`,
     `Modelo: ${datos.modelo || datos.vehiculo || "-"}`,
     `Color: ${datos.color || "-"}`,
-    `Tipo de servicio: ${cotizacion.tipoServicio || "-"}`,
+    `Transmisión: ${datos.transmision || "-"}`,
+    `Especificaciones: ${datos.especificaciones || datos.informacionTecnica || "-"}`,
+    `Personas a trasladar: ${datos.personasTrasladar || "0"}`,
+    `Es por siniestro: ${datos.siniestro || "-"}`,
+    `Está en cochera/garaje: ${datos.enCochera || "-"}`,
+    `Posee carga: ${datos.poseeCarga || "-"}`,
+    `El vehículo rueda: ${datos.vehiculoRueda || "-"}`,
+    `Tiene tráiler: ${datos.tieneTrailer || "-"}`,
+    `Requiere extracción: ${datos.requiereExtraccion || "-"}`,
+    `Observaciones: ${datos.observaciones || "-"}`,
+    "",
+    "UBICACIÓN Y DESPACHO",
     `Base asignada: ${cotizacion.base?.base || "-"} - ${cotizacion.base?.prestador || "-"}`,
     `Origen: ${cotizacion.origen || "-"}`,
     ...(!auxilio ? [`Destino: ${cotizacion.destino || "-"}`] : []),
@@ -91,7 +110,7 @@ function buildRemito(cotizacion) {
   ];
 
   return {
-    version: 3,
+    version: 4,
     preparadoAt: nowIso(),
     texto: lines.join("\n"),
     incluyeImportes: false

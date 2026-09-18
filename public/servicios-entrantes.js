@@ -89,6 +89,18 @@
     if ($("marca")) $("marca").value = q.datosMail?.marca || "";
     if ($("modelo")) $("modelo").value = q.datosMail?.modelo || q.datosMail?.vehiculo || "";
     if ($("colorVehiculo")) $("colorVehiculo").value = q.datosMail?.color || "";
+    if ($("fechaServicio")) $("fechaServicio").value = q.datosMail?.fechaServicio || "";
+    if ($("condicionServicio")) $("condicionServicio").value = q.datosMail?.condicionServicio || "INMEDIATO";
+    if ($("transmision")) $("transmision").value = q.datosMail?.transmision || "";
+    if ($("especificaciones")) $("especificaciones").value = q.datosMail?.especificaciones || q.datosMail?.informacionTecnica || "";
+    if ($("personasTrasladar")) $("personasTrasladar").value = q.datosMail?.personasTrasladar || "0";
+    if ($("siniestro")) $("siniestro").value = q.datosMail?.siniestro || "NO";
+    if ($("enCochera")) $("enCochera").value = q.datosMail?.enCochera || "NO";
+    if ($("poseeCarga")) $("poseeCarga").value = q.datosMail?.poseeCarga || "NO";
+    if ($("vehiculoRueda")) $("vehiculoRueda").value = q.datosMail?.vehiculoRueda || "SI";
+    if ($("tieneTrailer")) $("tieneTrailer").value = q.datosMail?.tieneTrailer || "NO";
+    if ($("requiereExtraccion")) $("requiereExtraccion").value = q.datosMail?.requiereExtraccion || "NO";
+    if ($("observaciones")) $("observaciones").value = q.datosMail?.observaciones || "";
     if ($("origen")) $("origen").value = q.origen || "";
     if ($("destino")) $("destino").value = q.destino || "";
     setSelect("tipoServicio", q.tipoServicio);
