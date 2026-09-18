@@ -83,6 +83,12 @@
     if ($("empresa")) $("empresa").value = q.empresa || "";
     if ($("numeroServicio")) $("numeroServicio").value = q.numeroServicio || "";
     if ($("patente")) $("patente").value = q.patente || "";
+    if ($("asegurado")) $("asegurado").value = q.datosMail?.asegurado || "";
+    if ($("telefono")) $("telefono").value = q.datosMail?.telefono || "";
+    if ($("emailAsegurado")) $("emailAsegurado").value = q.datosMail?.emailAsegurado || "";
+    if ($("marca")) $("marca").value = q.datosMail?.marca || "";
+    if ($("modelo")) $("modelo").value = q.datosMail?.modelo || q.datosMail?.vehiculo || "";
+    if ($("colorVehiculo")) $("colorVehiculo").value = q.datosMail?.color || "";
     if ($("origen")) $("origen").value = q.origen || "";
     if ($("destino")) $("destino").value = q.destino || "";
     setSelect("tipoServicio", q.tipoServicio);

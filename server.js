@@ -315,6 +315,9 @@ async function quoteFromMail(parsed, gmailMeta) {
     gmail: { messageId: gmailMeta.id, threadId: gmailMeta.threadId || null, subject: gmailMeta.subject || "", receivedAt: gmailMeta.receivedAt || fecha },
     datosMail: {
       vehiculo: parsed.vehiculo || "",
+      marca: parsed.marca || "",
+      modelo: parsed.modelo || "",
+      color: parsed.color || "",
       observaciones: parsed.observaciones || "",
       asegurado: parsed.asegurado || "",
       telefono: parsed.telefono || "",
@@ -585,7 +588,7 @@ app.get("/api/resumen", auth, (req, res) => {
   });
 });
 app.post("/api/cotizar", auth, (req, res) => {
-  const { baseId, modalidad, tipoServicio, tipoCliente, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente } = req.body || {};
+  const { baseId, modalidad, tipoServicio, tipoCliente, origen, destino, kmBaseOrigen, kmOrigenDestino, kmDestinoBase, empresa, numeroServicio, patente, asegurado, telefono, emailAsegurado, marca, modelo, color } = req.body || {};
   const base = basesDoc.bases.find(b => b.id === baseId);
   if (!base) return res.status(400).json({ error: "Base invalida" });
   const modalidadCotizacion = ["AMBA_CABA", "INTERIOR"].includes(modalidad) ? modalidad : base.modalidad;
@@ -594,9 +597,20 @@ app.post("/api/cotizar", auth, (req, res) => {
   const empresaTexto = String(empresa || "").trim();
   const servicioTexto = String(numeroServicio || "").trim();
   const patenteTexto = String(patente || "").trim().toUpperCase();
+  const datosAsociado = {
+    asegurado: String(asegurado || "").trim(), telefono: String(telefono || "").trim(),
+    emailAsegurado: String(emailAsegurado || "").trim(), marca: String(marca || "").trim(),
+    modelo: String(modelo || "").trim(), color: String(color || "").trim()
+  };
   if (!empresaTexto) return res.status(400).json({ error: "Ingrese la empresa o cliente" });
   if (!servicioTexto) return res.status(400).json({ error: "Ingrese el numero de servicio" });
   if (!patenteTexto) return res.status(400).json({ error: "Ingrese la patente" });
+  if (!datosAsociado.asegurado) return res.status(400).json({ error: "Ingrese el nombre del asociado" });
+  if (!datosAsociado.telefono) return res.status(400).json({ error: "Ingrese el teléfono del asociado" });
+  if (!datosAsociado.emailAsegurado || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(datosAsociado.emailAsegurado)) return res.status(400).json({ error: "Ingrese un correo válido del asociado" });
+  if (!datosAsociado.marca) return res.status(400).json({ error: "Ingrese la marca del vehículo" });
+  if (!datosAsociado.modelo) return res.status(400).json({ error: "Ingrese el modelo del vehículo" });
+  if (!datosAsociado.color) return res.status(400).json({ error: "Ingrese el color del vehículo" });
   const aux = String(tipoServicio || "").toLowerCase().replace(/á/g, "a") === "auxilio mecanico";
   const k1 = asKm(kmBaseOrigen), k2 = aux ? 0 : asKm(kmOrigenDestino), k3 = aux ? 0 : asKm(kmDestinoBase);
   if (k1 === null || (!aux && k2 === null)) return res.status(400).json({ error: aux ? "Los kilometros Base-Origen deben ser un numero valido" : "Los kilometros Base-Origen y Origen-Destino deben ser numeros validos" });
@@ -608,6 +622,7 @@ app.post("/api/cotizar", auth, (req, res) => {
   const cotizacion = {
     id: "COT-" + Date.now(), fecha, operador: req.user.user,
     empresa: empresaTexto, numeroServicio: servicioTexto, patente: patenteTexto, tipoCliente: tipoClienteCotizacion,
+    datosMail: datosAsociado,
     base: { id: base.id, prestador: base.prestador, base: base.base, zona: base.zona, modalidad: modalidadCotizacion },
     tipoServicio: tipoServicio || "Semipesado", origen: String(origen || "").trim(), destino: aux ? "" : String(destino || "").trim(),
     tramos: { baseOrigen: k1, origenDestino: k2, destinoBase: !aux && modalidadCotizacion === "INTERIOR" ? k3 : 0 },

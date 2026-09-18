@@ -60,6 +60,7 @@ function cambiarEstado(cotizacion, estado, usuario, detalle = "") {
 }
 
 function buildRemito(cotizacion) {
+  const datos = cotizacion.datosMail || {};
   const auxilio = String(cotizacion.tipoServicio || "").toLowerCase().replace(/á/g, "a") === "auxilio mecanico";
   const interior = cotizacion.base?.modalidad === "INTERIOR";
   const recorrido = auxilio
@@ -73,7 +74,13 @@ function buildRemito(cotizacion) {
     "",
     `Empresa / cliente: ${cotizacion.empresa || "-"}`,
     `Nº de servicio: ${cotizacion.numeroServicio || "-"}`,
+    `Asociado: ${datos.asegurado || "-"}`,
+    `Teléfono: ${datos.telefono || "-"}`,
+    `Correo: ${datos.emailAsegurado || "-"}`,
     `Patente: ${cotizacion.patente || "-"}`,
+    `Marca: ${datos.marca || "-"}`,
+    `Modelo: ${datos.modelo || datos.vehiculo || "-"}`,
+    `Color: ${datos.color || "-"}`,
     `Tipo de servicio: ${cotizacion.tipoServicio || "-"}`,
     `Base asignada: ${cotizacion.base?.base || "-"} - ${cotizacion.base?.prestador || "-"}`,
     `Origen: ${cotizacion.origen || "-"}`,
@@ -84,7 +91,7 @@ function buildRemito(cotizacion) {
   ];
 
   return {
-    version: 1,
+    version: 3,
     preparadoAt: nowIso(),
     texto: lines.join("\n"),
     incluyeImportes: false
