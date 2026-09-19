@@ -62,12 +62,31 @@
       section.insertBefore(banner, section.firstChild);
     }
     if (banner) {
-      banner.innerHTML = `🔔 NUEVO SERVICIO · ${esc(q.empresa || "Compañía")} · Nº ${esc(q.numeroServicio || "-")} · ${esc(q.patente || "-")} · ${esc(q.origen || "-")}`;
+      banner.innerHTML = `<span>🔔 NUEVO SERVICIO · ${esc(q.empresa || "Compañía")} · Nº ${esc(q.numeroServicio || "-")} · ${esc(q.patente || "-")} · ${esc(q.origen || "-")}</span><small style="display:block;margin-top:6px;font-weight:700">Tocá este aviso para abrir y cotizar</small>`;
+      banner.setAttribute("role", "button");
+      banner.setAttribute("tabindex", "0");
+      banner.setAttribute("aria-label", "Abrir el servicio nuevo en el cotizador");
+      banner.style.cursor = "pointer";
+      banner.onclick = () => cargar(q);
+      banner.onkeydown = event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          cargar(q);
+        }
+      };
       banner.scrollIntoView({behavior:"smooth", block:"center"});
     }
     beep();
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("Asistir24 · Nuevo servicio", {body:`${q.empresa || "Compañía"} · ${q.numeroServicio || "Sin número"} · ${q.patente || "Sin patente"}`});
+    if ("Notification" in window && Notification.permission === "granted" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.ready
+        .then(registration => registration.showNotification("Asistir24 · Nuevo servicio", {
+          body:`${q.empresa || "Compañía"} · ${q.numeroServicio || "Sin número"} · ${q.patente || "Sin patente"}`,
+          icon:"/icon-192.png.png",
+          badge:"/icon-192.png.png",
+          tag:`servicio-${q.gmail?.messageId || q.id || Date.now()}`,
+          data:{url:"/app", servicioId:q.id || null}
+        }))
+        .catch(error => console.warn("No se pudo mostrar la notificación:", error));
     }
   }
 
@@ -109,7 +128,12 @@
     if ($("kmBaseOrigen") && q.tramos?.baseOrigen != null) $("kmBaseOrigen").value = q.tramos.baseOrigen;
     if ($("kmOrigenDestino") && q.tramos?.origenDestino != null) $("kmOrigenDestino").value = q.tramos.origenDestino;
     if ($("kmDestinoBase") && q.tramos?.destinoBase != null) $("kmDestinoBase").value = q.tramos.destinoBase;
-    $("quoteForm")?.scrollIntoView({behavior:"smooth", block:"start"});
+    const form = $("quoteForm");
+    form?.scrollIntoView({behavior:"smooth", block:"start"});
+    form?.animate(
+      [{boxShadow:"0 0 0 0 rgba(0,90,200,0)"},{boxShadow:"0 0 0 5px rgba(0,90,200,.35)"},{boxShadow:"0 0 0 0 rgba(0,90,200,0)"}],
+      {duration:1600, easing:"ease-out"}
+    );
     $("origen")?.dispatchEvent(new Event("input", {bubbles:true}));
   }
 
