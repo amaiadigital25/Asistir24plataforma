@@ -149,8 +149,27 @@
 
       const seen = seenIds();
       if (initialized) {
-        const nuevos = allItems.filter(q => !seen.has(String(q.gmail?.messageId || q.id)));
-        if (nuevos.length) alertNew(nuevos[0]);
+        const ahora = Date.now();
+        const MAX_ALERT_AGE_MS = 10 * 60 * 1000; // solo alertar servicios recibidos en los últimos 10 minutos
+        const nuevos = allItems.filter(q => {
+          const id = String(q.gmail?.messageId || q.id);
+          if (seen.has(id)) return false;
+
+          // Verificar fecha y hora real de recepción del servicio antes de alertar.
+          const fechaHora = q.gmail?.receivedAt || q.fecha;
+          const recibidoAt = Date.parse(fechaHora || "");
+          if (!Number.isFinite(recibidoAt)) return false;
+
+          const antiguedad = ahora - recibidoAt;
+          return antiguedad >= 0 && antiguedad <= MAX_ALERT_AGE_MS;
+        });
+        if (nuevos.length) {
+          nuevos.sort((a, b) =>
+            Date.parse(b.gmail?.receivedAt || b.fecha || 0) -
+            Date.parse(a.gmail?.receivedAt || a.fecha || 0)
+          );
+          alertNew(nuevos[0]);
+        }
       }
       allItems.forEach(q => seen.add(String(q.gmail?.messageId || q.id)));
       saveSeen(seen);
