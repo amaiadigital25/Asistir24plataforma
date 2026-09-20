@@ -67,7 +67,9 @@ function setKmStatus(message,isError=false){ const status=$("kmStatus"); status.
 function invalidateRouteKm(){ const input=$("kmBaseOrigen"); if(input.dataset.auto==="true")input.value=""; input.dataset.auto="false"; delete input.dataset.baseId; delete input.dataset.origen; }
 async function calculateBaseOriginKm({silent=false}={}){ if(!silent)setKmStatus("Cargando el servicio de cálculo de rutas..."); return false; }
 function updateRouteUI(){ const base=selectedBase(); if(!base)return; const modalidad=currentModalidad(), auxilio=isAuxilioMecanico($("tipoServicio").value); $("routeRule").textContent=routeLabel(modalidad,$("tipoServicio").value); $("destinationWrap").style.display=auxilio?"none":"grid"; $("kmOriginDestinationWrap").style.display=auxilio?"none":"grid"; $("destino").required=!auxilio; $("kmOrigenDestino").required=!auxilio; $("returnWrap").style.display=!auxilio&&modalidad==="INTERIOR"?"grid":"none"; $("kmDestinoBase").required=!auxilio&&modalidad==="INTERIOR"; if(auxilio){$("destino").value="";$("kmOrigenDestino").value="";$("kmDestinoBase").value="";}else if(modalidad!=="INTERIOR")$("kmDestinoBase").value=""; }
-function renderBaseSelect(){ $("baseId").innerHTML=bases.map(b=>`<option value="${b.id}">${b.base} - ${b.prestador} (${b.zona})</option>`).join(""); syncModalidadWithBase(); updateRouteUI(); }
+function baseLabel(b){return `${b.base} - ${b.prestador} (${b.zona})`}
+function syncBaseFromText(){const text=$("baseSearchInput").value.trim().toLowerCase();const b=bases.find(x=>baseLabel(x).toLowerCase()===text)||bases.find(x=>x.base.toLowerCase()===text)||bases.find(x=>baseLabel(x).toLowerCase().includes(text));$("baseId").value=b?.id||"";return b}
+function renderBaseSelect(){ $("baseId").innerHTML='<option value=""></option>'+bases.map(b=>`<option value="${b.id}">${baseLabel(b)}</option>`).join("");$("baseOptions").innerHTML=bases.map(b=>`<option value="${baseLabel(b)}"></option>`).join(""); if(bases[0]){$("baseId").value=bases[0].id;$("baseSearchInput").value=baseLabel(bases[0])} syncModalidadWithBase(); updateRouteUI(); }
 function renderBases(){ const q=$("searchBase").value.trim().toLowerCase(), modalidad=$("filterModalidad").value; const filtered=bases.filter(b=>(!q||[b.prestador,b.base,b.zona,b.tipo,b.estado].join(" ").toLowerCase().includes(q))&&(!modalidad||b.modalidad===modalidad)); $("baseCount").textContent=`${filtered.length} bases`; $("baseList").innerHTML=filtered.map(b=>`<div class="base-row"><div><strong>${b.base}</strong><span>${b.prestador}</span></div><div class="base-meta"><span>${b.zona}</span><span>${b.tipo}</span><span class="status ${b.estado==="ACTIVO"?"ok":"warn"}">${b.estado}</span></div></div>`).join("")||`<p class="muted">Sin resultados.</p>`; }
 async function selectNearestBase(){
   const button=$("nearestBaseButton"), status=$("nearestBaseStatus"), origen=$("origen").value.trim();
@@ -75,7 +77,7 @@ async function selectNearestBase(){
   button.disabled=true;status.classList.remove("error");status.textContent="Buscando la base activa compatible más cercana...";
   try{
     const data=await api("/api/base-mas-cercana",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({origen,tipoServicio:$("tipoServicio").value})});
-    $("baseId").value=data.recomendada.id;syncModalidadWithBase();updateRouteUI();invalidateRouteKm();
+    $("baseId").value=data.recomendada.id;$("baseSearchInput").value=baseLabel(data.recomendada);syncModalidadWithBase();updateRouteUI();invalidateRouteKm();
     status.textContent=`Base recomendada: ${data.recomendada.base} - ${data.recomendada.prestador} (${Number(data.recomendada.kmAproximada).toFixed(1)} km aproximados). Calculando ruta real...`;
     await calculateBaseOriginKm({silent:false});return true;
   }catch(error){status.textContent=error.message;status.classList.add("error");return false;}
@@ -94,7 +96,9 @@ async function loadQuotes(){
   }).join("")||`<tr><td colspan="10" class="muted">Todavía no hay cotizaciones.</td></tr>`;
 }
 async function refreshDashboardData(){ const button=$("refreshQuotes"), originalText=button.textContent; button.disabled=true;button.textContent="Actualizando...";try{await Promise.all([loadQuotes(),loadStats(),loadConfig()]);button.textContent="Actualizado ✓";setTimeout(()=>{button.textContent=originalText;button.disabled=false;},1200);}catch(error){console.error(error);button.textContent="Reintentar";button.disabled=false;} }
-$("baseId").addEventListener("change",async()=>{invalidateRouteKm();syncModalidadWithBase();updateRouteUI();if($("origen").value.trim())await calculateBaseOriginKm({silent:true});});
+$("baseSearchInput").addEventListener("input",()=>{const b=syncBaseFromText();invalidateRouteKm();if(b){syncModalidadWithBase();updateRouteUI()}});
+$("baseSearchInput").addEventListener("change",async()=>{const b=syncBaseFromText();if(!b)return;syncModalidadWithBase();updateRouteUI();if($("origen").value.trim())await calculateBaseOriginKm({silent:true});});
+$("baseId").addEventListener("change",async()=>{const b=selectedBase();if(b)$("baseSearchInput").value=baseLabel(b);invalidateRouteKm();syncModalidadWithBase();updateRouteUI();if($("origen").value.trim())await calculateBaseOriginKm({silent:true});});
 $("modalidad").addEventListener("change",async()=>{invalidateRouteKm();updateRouteUI();setKmStatus("Modalidad modificada. El recorrido se recalculará automáticamente.");if($("origen").value.trim())await calculateBaseOriginKm({silent:true});});
 $("tipoServicio").addEventListener("change",updateRouteUI); $("tarifaCompania").addEventListener("click",()=>setTipoCliente("COMPANIA")); $("tarifaParticular").addEventListener("click",()=>setTipoCliente("PARTICULAR"));
 $("nearestBaseButton").addEventListener("click",selectNearestBase);
