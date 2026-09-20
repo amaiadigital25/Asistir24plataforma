@@ -140,12 +140,16 @@
   async function cargarEntrantes() {
     const body = $("incomingRows");
     const count = $("incomingCount");
+    const refreshButton = $("refreshIncoming");
+    const originalText = refreshButton?.textContent || "Actualizar";
+    if (refreshButton) { refreshButton.disabled = true; refreshButton.textContent = "Actualizando..."; }
     if (!body || typeof api !== "function") return;
     try {
       const data = await api("/api/cotizaciones");
       const allItems = (data.items || []).filter(q => q.gmail?.messageId);
       const items = allItems.slice(0, 3);
       if (count) count.textContent = `${allItems.length} servicios · últimos 3`;
+      if (refreshButton) { refreshButton.textContent = "Actualizado ✓"; setTimeout(() => { refreshButton.textContent = originalText; refreshButton.disabled = false; }, 1000); }
 
       const seen = seenIds();
       if (initialized) {
@@ -190,6 +194,7 @@
       body.querySelectorAll(".incoming-open").forEach(btn => btn.addEventListener("click", () => cargar(items[Number(btn.dataset.index)])));
     } catch (e) {
       body.innerHTML = `<tr><td colspan="9" class="error">No se pudieron cargar los servicios entrantes: ${esc(e.message)}</td></tr>`;
+      if (refreshButton) { refreshButton.textContent = "Reintentar"; refreshButton.disabled = false; }
     }
   }
 
