@@ -783,6 +783,7 @@ app.get(["/emergencias", "/api/emergencias"], auth, (req, res) => res.json({ tot
 
 app.get("/prestador-acceso", (req, res) => res.sendFile(path.join(__dirname, "public", "prestador-acceso.html")));
 app.get("/prestador", (req, res) => res.sendFile(path.join(__dirname, "public", "prestador.html")));
+app.get("/prestadores-revision", (req, res) => res.sendFile(path.join(__dirname, "public", "prestadores-revision.html")));
 app.use(express.static(path.join(__dirname, "public"), { index: false, maxAge: "5m" }));
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
 app.get("/admin", (req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
