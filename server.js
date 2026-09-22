@@ -781,12 +781,12 @@ app.post(["/emergencia", "/api/emergencia"], auth, (req, res) => {
 });
 app.get(["/emergencias", "/api/emergencias"], auth, (req, res) => res.json({ total: emergencias.length, items: emergencias }));
 
+app.get("/prestador-acceso", (req, res) => res.sendFile(path.join(__dirname, "public", "prestador-acceso.html")));
+app.get("/prestador", (req, res) => res.sendFile(path.join(__dirname, "public", "prestador.html")));
 app.use(express.static(path.join(__dirname, "public"), { index: false, maxAge: "5m" }));
 app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
 app.get("/admin", (req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
 app.get("/facturacion", (req, res) => res.sendFile(path.join(__dirname, "public", "facturacion.html")));
-app.get("/prestador-acceso", (req, res) => res.sendFile(path.join(__dirname, "public", "prestador-acceso.html")));
-app.get("/prestador", (req, res) => res.sendFile(path.join(__dirname, "public", "prestador.html")));
 app.get("*", (req, res) => res.status(404).json({ error: "Ruta no encontrada" }));
 
 app.listen(PORT, () => console.log("Asistir24 Plataforma Cerrada activa en puerto " + PORT));
