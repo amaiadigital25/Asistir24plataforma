@@ -1,4 +1,5 @@
 const CLAIMS_BASES = require('../data/claims-bases.json');
+const { parseClaimsPayload, claimsServiceKey } = require('./claims-direct-parser');
 
 function patchLocationApi(source) {
   if (source.includes('app.post("/api/ruta-completa"')) return source;
@@ -26,6 +27,21 @@ function patchLocationApi(source) {
   ].join('\n');
 
   const endpoint = [
+    'const CLAIMS_SEEN_TTL_MS = 24 * 60 * 60 * 1000;',
+    'const claimsSeen = new Map();',
+    'function cleanClaimsSeen() { const now = Date.now(); for (const [k,t] of claimsSeen) if (now-t > CLAIMS_SEEN_TTL_MS) claimsSeen.delete(k); }',
+    'app.post("/api/claims/preview", auth, async (req, res) => {',
+    '  try {',
+    '    cleanClaimsSeen();',
+    '    const servicio = parseClaimsPayload(req.body || {});',
+    '    if (!servicio.origen) return res.status(400).json({ error: "Claims no entregó ubicación de origen" });',
+    '    const key = claimsServiceKey(servicio);',
+    '    const repetido = claimsSeen.has(key);',
+    '    if (!repetido) claimsSeen.set(key, Date.now());',
+    '    res.json({ success: true, repetido, alertar: !repetido, servicio, siguientePaso: "/api/base-mas-cercana" });',
+    '  } catch (error) { res.status(400).json({ error: error.message || "No se pudo interpretar el servicio de Claims" }); }',
+    '});',
+    ''
     'const CLAIMS_BASES_FIJAS = ' + JSON.stringify(CLAIMS_BASES) + ';',
     'const CENTROS_BASE_PROVISORIOS = {',
     '  "eugenio-casanova": [-34.700, -58.585], "eugenio-liniers": [-34.643, -58.520], "federico-escobar": [-34.346, -58.794],',
