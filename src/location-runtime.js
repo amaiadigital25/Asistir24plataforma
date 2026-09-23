@@ -1,3 +1,5 @@
+const CLAIMS_BASES = require("../data/claims-bases.json");
+
 function patchLocationApi(source) {
   if (source.includes('app.post("/api/ruta-completa"')) return source;
   const marker = 'app.post("/api/distancia", auth, async (req, res) => {';
@@ -5,6 +7,19 @@ function patchLocationApi(source) {
 
   // Bases exactas confirmadas por Operaciones. Se aplican al cargar server.js,
   // antes de exponer /api/bases y antes de calcular cualquier recorrido.
+  const claimsBasesBootstrap = [
+    'const CLAIMS_BASES_FIJAS = ' + JSON.stringify(CLAIMS_BASES) + ';',
+    'function normClaims(v){ return String(v || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }',
+    'function claimsBaseMatch(base){ const bp=normClaims(base?.prestador), bl=normClaims(base?.base); return CLAIMS_BASES_FIJAS.find(x => { const xp=normClaims(x.prestador), xl=normClaims(x.localidad); return (bp.includes(xp) || xp.includes(bp)) && (bl.includes(xl) || xl.includes(bl)); }); }',
+    'for (const fija of CLAIMS_BASES_FIJAS) {',
+    '  const match = basesDoc.bases.find(b => { const bp=normClaims(b.prestador), bl=normClaims(b.base); const fp=normClaims(fija.prestador), fl=normClaims(fija.localidad); return (bp.includes(fp) || fp.includes(bp)) && (bl.includes(fl) || fl.includes(bl)); });',
+    '  const modalidad = /^(CABA|NORTE|OESTE|SUR)$/i.test(fija.zona) ? "AMBA_CABA" : "INTERIOR";',
+    '  const direccionCompleta = [fija.direccion, fija.localidad, fija.zona, "Argentina"].filter(Boolean).join(", ");',
+    '  if (match) { match.direccion = direccionCompleta; match.direccionFijaClaims = true; match.modalidad = modalidad; }',
+    '}',
+    ''
+  ].join('\\n');
+
   const exactBasesBootstrap = [
     'const BASES_EXACTAS_OPERACIONES = [',
     '  { id: "mm-remolques-saenz-pena", match: b => b.prestador === "MM Remolques", prestador: "MM Remolques", base: "Sáenz Peña", direccion: "Gral. Enrique Mosconi 2535, Sáenz Peña, Tres de Febrero, Buenos Aires, Argentina", zona: "ZONA OESTE", modalidad: "AMBA_CABA", estado: "ACTIVO", tipo: "Semipesados" },',
@@ -124,6 +139,6 @@ function patchLocationApi(source) {
     '});',
     ''
   ].join('\n');
-  return source.replace(marker, exactBasesBootstrap + endpoint + marker);
+  return source.replace(marker, claimsBasesBootstrap + exactBasesBootstrap + endpoint + marker);
 }
 module.exports = { patchLocationApi };
