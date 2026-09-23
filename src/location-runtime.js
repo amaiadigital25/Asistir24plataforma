@@ -18,7 +18,7 @@ function patchLocationApi(source) {
     '  if (match) { match.direccion = direccionCompleta; match.direccionFijaClaims = true; match.modalidad = modalidad; }',
     '}',
     ''
-  ].join('\\n');
+  ].join('\n');
 
   const exactBasesBootstrap = [
     'const BASES_EXACTAS_OPERACIONES = [',
