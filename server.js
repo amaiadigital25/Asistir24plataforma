@@ -27,7 +27,7 @@ const FACTURACION_ESTADOS = ["PENDIENTE", "LISTO_PARA_FACTURAR", "FACTURADO", "C
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const GMAIL_EXPECTED_ACCOUNT = process.env.GMAIL_ACCOUNT || "asistir24operadores@gmail.com";
 const GMAIL_AUTO_ENABLED = String(process.env.GMAIL_AUTO_ENABLED || "").toLowerCase() === "true";
-const GMAIL_POLL_MS = Math.max(60000, Number(process.env.GMAIL_POLL_MS || 120000));
+const GMAIL_POLL_MS = Math.max(60000, Number(process.env.GMAIL_POLL_MS || 300000));
 
 function tarifaPorTipoCliente(tipoCliente) {
   return String(tipoCliente || "").toUpperCase() === "PARTICULAR" ? TARIFAS.PARTICULAR : TARIFAS.COMPANIA;
@@ -165,6 +165,12 @@ function writeGmailConnection(connection) {
 function processedMailIds() {
   const data = readData();
   return new Set(Array.isArray(data.gmailProcessedIds) ? data.gmailProcessedIds : []);
+}
+function claimsEventAlreadyProcessed(evento, asistenciaId) {
+  if (!evento || !asistenciaId) return false;
+  const data = readData();
+  const events = Array.isArray(data.gmailEvents) ? data.gmailEvents : [];
+  return events.some(item => String(item.evento || "") === String(evento) && String(item.asistenciaId || "") === String(asistenciaId));
 }
 function markMailProcessed(id, detail = {}) {
   const data = readData();
@@ -410,10 +416,20 @@ async function pollGmail({ force = false } = {}) {
         const parsed = parseClaimsMail({ messageId: msg.id, threadId: msg.threadId, subject, body });
         const meta = { id: msg.id, threadId: msg.threadId, subject, receivedAt: msg.internalDate ? new Date(Number(msg.internalDate)).toISOString() : new Date().toISOString() };
         if (parsed.evento === "COTIZAR") {
+          if (claimsEventAlreadyProcessed("COTIZAR", parsed.asistenciaId)) {
+            markMailProcessed(ref.id, { evento: "COTIZAR_REPETIDO", asistenciaId: parsed.asistenciaId, subject });
+            processed++;
+            continue;
+          }
           const result = await quoteFromMail(parsed, meta);
           if (result.created) quoted++;
           markMailProcessed(ref.id, { evento: "COTIZAR", asistenciaId: parsed.asistenciaId, subject });
         } else if (parsed.evento === "CONFIRMACION") {
+          if (claimsEventAlreadyProcessed("CONFIRMACION", parsed.asistenciaId)) {
+            markMailProcessed(ref.id, { evento: "CONFIRMACION_REPETIDA", asistenciaId: parsed.asistenciaId, subject });
+            processed++;
+            continue;
+          }
           const result = confirmFromMail(parsed, meta);
           if (result.changed) confirmed++;
           markMailProcessed(ref.id, { evento: "CONFIRMACION", asistenciaId: parsed.asistenciaId, subject });
@@ -435,7 +451,7 @@ async function pollGmail({ force = false } = {}) {
   }
 }
 
-app.get("/health", (req, res) => res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: getBases().length, version: "gmail-workflow-3", gmailAuto: GMAIL_AUTO_ENABLED }));
+app.get("/health", (req, res) => res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: getBases().length, version: "gmail-workflow-4-dedupe", gmailAuto: GMAIL_AUTO_ENABLED }));
 
 app.post(["/login", "/api/login"], (req, res) => {
   const { username, password } = req.body || {};
