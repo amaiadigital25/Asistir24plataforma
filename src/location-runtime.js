@@ -1,3 +1,5 @@
+const CLAIMS_BASES = require('../data/claims-bases.json');
+
 function patchLocationApi(source) {
   if (source.includes('app.post("/api/ruta-completa"')) return source;
   const marker = 'app.post("/api/distancia", auth, async (req, res) => {';
@@ -24,6 +26,7 @@ function patchLocationApi(source) {
   ].join('\n');
 
   const endpoint = [
+    'const CLAIMS_BASES_FIJAS = ' + JSON.stringify(CLAIMS_BASES) + ';',
     'const CENTROS_BASE_PROVISORIOS = {',
     '  "eugenio-casanova": [-34.700, -58.585], "eugenio-liniers": [-34.643, -58.520], "federico-escobar": [-34.346, -58.794],',
     '  "ariel-sys-zarate-belgrano": [-34.095, -59.024], "ariel-sys-mar-de-ajo": [-36.724, -56.678], "ulises-villa-tesei": [-34.621, -58.633],',
@@ -47,7 +50,17 @@ function patchLocationApi(source) {
     '  "daniel-saenz-pena": [-26.790, -60.442], "guevara-hijos-la-plata": [-34.921, -57.954], "gallardo-rio-gallegos": [-51.623, -69.216],',
     '  "auxleo-mendoza": [-32.890, -68.845], "moises-beiro-gral-paz": [-34.590, -58.520]',
     '};',
-    'function centroBase(base) {',
+    'function normalizaBaseTexto(v) { return String(v || "").toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^a-z0-9]/g, ""); }',
+    'function claimsBaseFija(base) {',
+    '  const p = normalizaBaseTexto(base?.prestador); const l = normalizaBaseTexto(base?.base);',
+    '  return CLAIMS_BASES_FIJAS.find(x => normalizaBaseTexto(x.prestador) === p && (normalizaBaseTexto(x.localidad) === l || l.includes(normalizaBaseTexto(x.localidad))));',
+    '}',
+    'function zonaClaimsCompatible(base, origenTexto) {',
+    '  const q = normalizaBaseTexto(origenTexto); const fija = claimsBaseFija(base); if (!fija) return true;',
+    '  const z = normalizaBaseTexto(fija.zona); const l = normalizaBaseTexto(fija.localidad);',
+    '  return q.includes(l) || q.includes(z) || z === "caba" || ["norte","oeste","sur"].includes(z);',
+    '}',
+    'function centroBase(base) {
     '  const value = CENTROS_BASE_PROVISORIOS[base?.id];',
     '  return Array.isArray(value) ? { lat: value[0], lng: value[1], provider: "Centro provisorio" } : null;',
     '}',
