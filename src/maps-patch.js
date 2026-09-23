@@ -17,6 +17,12 @@ const GEOREF_URL = process.env.GEOREF_URL || "https://apis.datos.gob.ar/georef/a
 const OSRM_URLS = String(process.env.OSRM_URLS || "https://router.project-osrm.org,https://routing.openstreetmap.de/routed-car").split(",").map(v => v.trim()).filter(Boolean);
 let lastNominatimAt = 0;
 const geocodeCache = new Map();
+const routeCache = new Map();
+const CACHE_MAX = 5000;
+function cacheSet(cache, key, value) {
+  if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
+  cache.set(key, value);
+}
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 async function fetchWithTimeout(url, options = {}) {
@@ -188,7 +194,7 @@ async function geocodeOSM(address) {
     for (const provider of [georefGeocode, georefLocalityGeocode, nominatimGeocode, photonGeocode]) {
       try {
         const point = await provider(variant);
-        geocodeCache.set(cacheKey, point);
+        cacheSet(geocodeCache, cacheKey, point);
         console.log(`[Asistir24 Maps] ${point.provider || "Geocoder"}: ${cleanAddress(variant)} -> ${point.lat},${point.lng}`);
         return point;
       } catch (error) { errors.push(error.message); }
@@ -207,9 +213,11 @@ async function osrmRoute(origin, destination, baseUrl) {
   return meters;
 }
 async function routeOSM(origin, destination) {
+  const routeKey = `${origin.lat.toFixed(5)},${origin.lng.toFixed(5)}>${destination.lat.toFixed(5)},${destination.lng.toFixed(5)}`;
+  if (routeCache.has(routeKey)) return routeCache.get(routeKey);
   const errors = [];
   for (const baseUrl of OSRM_URLS) {
-    try { return await osrmRoute(origin, destination, baseUrl); }
+    try { const meters = await osrmRoute(origin, destination, baseUrl); cacheSet(routeCache, routeKey, meters); return meters; }
     catch (error) { errors.push(error.message); }
   }
   throw new Error(`No se pudo calcular el recorrido. ${errors.join(" | ")}`);
