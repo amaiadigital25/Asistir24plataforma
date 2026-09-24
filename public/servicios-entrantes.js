@@ -29,7 +29,10 @@
   }
 
   function saveSeen(ids) {
-    localStorage.setItem(SEEN_KEY, JSON.stringify([...ids].slice(-200)));
+    // Guardar los IDs mas recientes. Antes se conservaban los ultimos insertados
+    // del Set y, al recorrer cotizaciones de nueva a vieja, podia expulsarse
+    // justamente el servicio nuevo y volver a alertar cada 15 segundos.
+    localStorage.setItem(SEEN_KEY, JSON.stringify([...ids].slice(0, 500)));
   }
 
   function beep() {
@@ -83,7 +86,7 @@
           body:`${q.empresa || "Compañía"} · ${q.numeroServicio || "Sin número"} · ${q.patente || "Sin patente"}`,
           icon:"/icon-192.png.png",
           badge:"/icon-192.png.png",
-          tag:`servicio-${q.gmail?.messageId || q.id || Date.now()}`,
+          tag:`servicio-${q.numeroServicio || q.gmail?.messageId || q.id}`,
           data:{url:"/app", servicioId:q.id || null}
         }))
         .catch(error => console.warn("No se pudo mostrar la notificación:", error));
@@ -175,8 +178,11 @@
           alertNew(nuevos[0]);
         }
       }
-      allItems.forEach(q => seen.add(String(q.gmail?.messageId || q.id)));
-      saveSeen(seen);
+      // Reconstruir el conjunto poniendo primero los servicios actuales/nuevos.
+      // Asi un servicio ya marcado permanece visto entre cada polling.
+      const currentIds = allItems.slice(0, 500).map(q => String(q.gmail?.messageId || q.id));
+      const stableSeen = new Set([...currentIds, ...seen]);
+      saveSeen(stableSeen);
       initialized = true;
 
       body.innerHTML = items.map((q, i) => `
