@@ -169,8 +169,21 @@ function processedMailIds() {
 function claimsEventAlreadyProcessed(evento, asistenciaId) {
   if (!evento || !asistenciaId) return false;
   const data = readData();
+  const key = String(evento) + ":" + String(asistenciaId);
+  const notified = data.claimsNotified && typeof data.claimsNotified === "object" ? data.claimsNotified : {};
+  if (notified[key]) return true;
   const events = Array.isArray(data.gmailEvents) ? data.gmailEvents : [];
   return events.some(item => String(item.evento || "") === String(evento) && String(item.asistenciaId || "") === String(asistenciaId));
+}
+function markClaimsEventNotified(evento, asistenciaId) {
+  if (!evento || !asistenciaId) return;
+  const data = readData();
+  if (!data.claimsNotified || typeof data.claimsNotified !== "object" || Array.isArray(data.claimsNotified)) data.claimsNotified = {};
+  const key = String(evento) + ":" + String(asistenciaId);
+  if (!data.claimsNotified[key]) {
+    data.claimsNotified[key] = { evento: String(evento), asistenciaId: String(asistenciaId), notifiedAt: new Date().toISOString() };
+    writeData(data);
+  }
 }
 function markMailProcessed(id, detail = {}) {
   const data = readData();
@@ -423,6 +436,7 @@ async function pollGmail({ force = false } = {}) {
           }
           const result = await quoteFromMail(parsed, meta);
           if (result.created) quoted++;
+          markClaimsEventNotified("COTIZAR", parsed.asistenciaId);
           markMailProcessed(ref.id, { evento: "COTIZAR", asistenciaId: parsed.asistenciaId, subject });
         } else if (parsed.evento === "CONFIRMACION") {
           if (claimsEventAlreadyProcessed("CONFIRMACION", parsed.asistenciaId)) {
@@ -432,6 +446,7 @@ async function pollGmail({ force = false } = {}) {
           }
           const result = confirmFromMail(parsed, meta);
           if (result.changed) confirmed++;
+          markClaimsEventNotified("CONFIRMACION", parsed.asistenciaId);
           markMailProcessed(ref.id, { evento: "CONFIRMACION", asistenciaId: parsed.asistenciaId, subject });
         } else {
           markMailProcessed(ref.id, { evento: "REVISAR", asistenciaId: parsed.asistenciaId, subject });
@@ -451,7 +466,7 @@ async function pollGmail({ force = false } = {}) {
   }
 }
 
-app.get("/health", (req, res) => res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: getBases().length, version: "gmail-workflow-4-dedupe", gmailAuto: GMAIL_AUTO_ENABLED }));
+app.get("/health", (req, res) => res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: getBases().length, version: "gmail-workflow-5-persistent-alert-dedupe", gmailAuto: GMAIL_AUTO_ENABLED }));
 
 app.post(["/login", "/api/login"], (req, res) => {
   const { username, password } = req.body || {};
