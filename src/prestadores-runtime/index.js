@@ -18,7 +18,7 @@ function writePrestadorFacturas(items){
 }
 function cleanProviderText(value,max=300){ return String(value||"").trim().slice(0,max); }
 function publicPrestadorFactura(item){
-  return {id:item.id,numeroServicio:item.numeroServicio,cotizacionId:item.cotizacionId,prestadorUserId:item.prestadorUserId,prestadorUsername:item.prestadorUsername,prestadorNombre:item.prestadorNombre,cuit:item.cuit,facturaNumero:item.facturaNumero,fechaFactura:item.fechaFactura,importe:item.importe,observaciones:item.observaciones,archivo:item.archivo?{id:item.archivo.id,nombre:item.archivo.nombre,mime:item.archivo.mime,size:item.archivo.size}:null,estado:item.estado,createdAt:item.createdAt,updatedAt:item.updatedAt,updatedBy:item.updatedBy,revision:item.revision||null,oc:item.oc||null};
+  return {id:item.id,numeroServicio:item.numeroServicio,cotizacionId:item.cotizacionId,cargaManual:Boolean(item.cargaManual),datosServicioManual:item.datosServicioManual||null,prestadorUserId:item.prestadorUserId,prestadorUsername:item.prestadorUsername,prestadorNombre:item.prestadorNombre,cuit:item.cuit,facturaNumero:item.facturaNumero,fechaFactura:item.fechaFactura,importe:item.importe,observaciones:item.observaciones,archivo:item.archivo?{id:item.archivo.id,nombre:item.archivo.nombre,mime:item.archivo.mime,size:item.archivo.size}:null,estado:item.estado,createdAt:item.createdAt,updatedAt:item.updatedAt,updatedBy:item.updatedBy,revision:item.revision||null,oc:item.oc||null};
 }
 function decodeProviderFile(value){
   const match=/^data:(application\\/pdf|image\\/jpeg|image\\/png);base64,([A-Za-z0-9+/=]+)$/.exec(String(value||""));
@@ -59,13 +59,16 @@ app.post("/api/prestadores/facturas", auth, (req,res)=>{
     if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(fechaFactura)) return res.status(400).json({error:"Ingrese una fecha de factura válida"});
     if(!Number.isFinite(importe)||importe<=0||importe>1000000000) return res.status(400).json({error:"Ingrese un importe válido"});
     const q=cotizaciones.find(x=>String(x.numeroServicio||"").trim()===numeroServicio);
-    if(!q) return res.status(404).json({error:"El número de servicio no existe en el cotizador"});
+    const cargaManual=!q;
+    const empresa=cleanProviderText(req.body?.empresa,120),patente=cleanProviderText(req.body?.patente,30),tipoServicio=cleanProviderText(req.body?.tipoServicio,120),fechaServicio=cleanProviderText(req.body?.fechaServicio,20);
+    if(cargaManual&&!empresa) return res.status(400).json({error:"Para un servicio manual indique la compañía"});
+    if(cargaManual&&!fechaServicio) return res.status(400).json({error:"Para un servicio manual indique la fecha del servicio"});
     const items=readPrestadorFacturas();
     if(items.some(x=>x.numeroServicio===numeroServicio&&x.estado!=="RECHAZADA")) return res.status(409).json({error:"Este servicio ya posee una factura registrada",codigo:"SERVICIO_YA_FACTURADO"});
     const file=decodeProviderFile(req.body?.archivoData); fs.mkdirSync(PRESTADOR_FACTURAS_DIR,{recursive:true});
     const archivoId=crypto.randomUUID()+file.extension; fs.writeFileSync(path.join(PRESTADOR_FACTURAS_DIR,archivoId),file.buffer,{flag:"wx"});
     const user=readUsers().find(x=>String(x.id)===String(req.user.id)),now=new Date().toISOString();
-    const item={id:"PF-"+crypto.randomUUID(),numeroServicio,cotizacionId:q.id,prestadorUserId:req.user.id,prestadorUsername:req.user.user,prestadorNombre:user?.name||req.user.user,cuit,facturaNumero,fechaFactura,importe:Math.round(importe*100)/100,observaciones,archivo:{id:archivoId,nombre:archivoNombre,mime:file.mime,size:file.buffer.length},estado:"PENDIENTE_REVISION",createdAt:now,updatedAt:now,updatedBy:req.user.user,revision:null,oc:null};
+    const item={id:"PF-"+crypto.randomUUID(),numeroServicio,cotizacionId:q?.id||null,cargaManual,datosServicioManual:cargaManual?{empresa,patente,tipoServicio,fechaServicio}:null,prestadorUserId:req.user.id,prestadorUsername:req.user.user,prestadorNombre:user?.name||req.user.user,cuit,facturaNumero,fechaFactura,importe:Math.round(importe*100)/100,observaciones,archivo:{id:archivoId,nombre:archivoNombre,mime:file.mime,size:file.buffer.length},estado:"PENDIENTE_REVISION",createdAt:now,updatedAt:now,updatedBy:req.user.user,revision:null,oc:null};
     items.unshift(item); writePrestadorFacturas(items.slice(0,10000)); res.status(201).json({success:true,factura:publicPrestadorFactura(item)});
   }catch(error){ res.status(400).json({error:error.message||"No se pudo cargar la factura"}); }
 });
