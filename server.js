@@ -777,6 +777,42 @@ app.post("/api/cotizaciones/:id/marcar-whatsapp-enviado", auth, (req, res) => {
   saveCollection("cotizaciones", cotizaciones);
   res.json({ success: true, cotizacion: q });
 });
+app.get("/api/admin/historial", auth, adminOnly, (req, res) => {
+  const tipo = String(req.query.tipo || "recibidos").toLowerCase();
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = 10;
+  let items = cotizaciones.slice();
+  if (tipo === "despachados") {
+    items = items.filter(item => {
+      const flujo = ensureWorkflow(item);
+      return Boolean(flujo.whatsappEnviadoAt || flujo.enServicioAt || flujo.finalizadoAt || ["ENVIADO_WHATSAPP","EN_SERVICIO","FINALIZADO"].includes(flujo.estado));
+    });
+  }
+  items.sort((a, b) => {
+    const fa = tipo === "despachados" ? (a.flujo?.whatsappEnviadoAt || a.flujo?.enServicioAt || a.flujo?.finalizadoAt || a.fecha) : (a.gmail?.receivedAt || a.fecha);
+    const fb = tipo === "despachados" ? (b.flujo?.whatsappEnviadoAt || b.flujo?.enServicioAt || b.flujo?.finalizadoAt || b.fecha) : (b.gmail?.receivedAt || b.fecha);
+    return Date.parse(fb || 0) - Date.parse(fa || 0);
+  });
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / limit));
+  const safePage = Math.min(page, pages);
+  const start = (safePage - 1) * limit;
+  const pageItems = items.slice(start, start + limit).map(item => ({
+    id: item.id,
+    numeroServicio: item.numeroServicio || "",
+    fecha: tipo === "despachados" ? (item.flujo?.whatsappEnviadoAt || item.flujo?.enServicioAt || item.flujo?.finalizadoAt || item.fecha) : (item.gmail?.receivedAt || item.fecha),
+    empresa: item.empresa || "",
+    origen: item.origen || "",
+    destino: item.destino || "",
+    operador: item.operador || item.flujo?.updatedBy || "",
+    prestador: item.base?.prestador || "",
+    base: item.base?.base || "",
+    estado: item.flujo?.estado || "",
+    patente: item.patente || ""
+  }));
+  res.json({ tipo, page: safePage, limit, total, pages, items: pageItems });
+});
+
 app.get("/api/facturacion", auth, adminOnly, (req, res) => {
   const estado = String(req.query.estado || "").trim();
   const term = String(req.query.q || "").trim().toLowerCase();
