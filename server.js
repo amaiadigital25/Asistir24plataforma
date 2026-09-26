@@ -271,33 +271,44 @@ function findBaseForAddress(address) {
   const interior = /mendoza|cordoba|córdoba|santa fe|entre rios|entre ríos|misiones|chaco|salta|tucuman|tucumán|la pampa|santa cruz/i.test(text);
   return active.find(b => b.modalidad === (interior ? "INTERIOR" : "AMBA_CABA")) || active[0] || getBases()[0];
 }
-async function geocodeGoogle(address) {
-  const key = process.env.GOOGLE_MAPS_API_KEY;
-  if (!key) throw new Error("Google Maps todavía no está configurado en el servidor");
-  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-  url.searchParams.set("address", address);
-  url.searchParams.set("region", "ar");
-  url.searchParams.set("key", key);
+function tomtomKey() {
+  const key = process.env.TOMTOM_API_KEY || process.env.TOMTOM_KEY;
+  if (!key) throw new Error("TomTom todavía no está configurado en el servidor (TOMTOM_API_KEY)");
+  return key;
+}
+function parseCoordinates(value) {
+  const match = String(value || "").trim().match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (!match) return null;
+  const lat = Number(match[1]), lng = Number(match[2]);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+async function geocodeTomTom(address) {
+  const direct = parseCoordinates(address);
+  if (direct) return direct;
+  const url = new URL("https://api.tomtom.com/search/2/geocode/" + encodeURIComponent(String(address || "").trim()) + ".json");
+  url.searchParams.set("key", tomtomKey());
+  url.searchParams.set("countrySet", "AR");
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("language", "es-AR");
   const response = await fetch(url);
   const data = await response.json();
-  if (!response.ok || data.status !== "OK" || !data.results?.[0]) throw new Error("No se pudo localizar: " + address);
-  return data.results[0].geometry.location;
+  const position = data.results?.[0]?.position;
+  if (!response.ok || !position || !Number.isFinite(Number(position.lat)) || !Number.isFinite(Number(position.lon))) {
+    throw new Error(data.errorText || "TomTom no pudo localizar: " + address);
+  }
+  return { lat: Number(position.lat), lng: Number(position.lon) };
 }
-async function routeKmGoogle(origin, destination) {
-  const key = process.env.GOOGLE_MAPS_API_KEY;
-  const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": "routes.distanceMeters" },
-    body: JSON.stringify({
-      origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
-      destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
-      travelMode: "DRIVE",
-      routingPreference: "TRAFFIC_UNAWARE"
-    })
-  });
+async function routeKmTomTom(origin, destination) {
+  const points = `${origin.lat},${origin.lng}:${destination.lat},${destination.lng}`;
+  const url = new URL("https://api.tomtom.com/routing/1/calculateRoute/" + points + "/json");
+  url.searchParams.set("key", tomtomKey());
+  url.searchParams.set("travelMode", "car");
+  url.searchParams.set("routeType", "fastest");
+  url.searchParams.set("traffic", "false");
+  const response = await fetch(url);
   const data = await response.json();
-  const meters = data.routes?.[0]?.distanceMeters;
-  if (!response.ok || !Number.isFinite(meters)) throw new Error(data.error?.message || "Google Maps no pudo calcular el recorrido");
+  const meters = Number(data.routes?.[0]?.summary?.lengthInMeters);
+  if (!response.ok || !Number.isFinite(meters)) throw new Error(data.error?.description || data.detailedError?.message || "TomTom no pudo calcular el recorrido");
   return Math.round((meters / 1000) * 10) / 10;
 }
 async function quoteFromMail(parsed, gmailMeta) {
@@ -311,16 +322,16 @@ async function quoteFromMail(parsed, gmailMeta) {
   const tarifa = TARIFA_COMPANIA;
   const baseTexto = [base.base, base.zona, "Argentina"].filter(Boolean).join(", ");
   const [baseCoord, origenCoord] = await Promise.all([
-    geocodeGoogle(baseTexto),
-    geocodeGoogle(parsed.origen + ", Argentina")
+    geocodeTomTom(baseTexto),
+    geocodeTomTom(parsed.origen + ", Argentina")
   ]);
-  const k1 = await routeKmGoogle(baseCoord, origenCoord);
+  const k1 = await routeKmTomTom(baseCoord, origenCoord);
   let k2 = 0;
   let k3 = 0;
   if (parsed.destino && tipoServicio !== "Auxilio mecanico") {
-    const destinoCoord = await geocodeGoogle(parsed.destino + ", Argentina");
-    k2 = await routeKmGoogle(origenCoord, destinoCoord);
-    if (modalidad === "INTERIOR") k3 = await routeKmGoogle(destinoCoord, baseCoord);
+    const destinoCoord = await geocodeTomTom(parsed.destino + ", Argentina");
+    k2 = await routeKmTomTom(origenCoord, destinoCoord);
+    if (modalidad === "INTERIOR") k3 = await routeKmTomTom(destinoCoord, baseCoord);
   }
   const kmTotal = k1 + k2 + (modalidad === "INTERIOR" ? k3 : 0);
   if (!(kmTotal > 0)) throw new Error("No se pudo obtener una distancia válida; la cotización queda pendiente de reintento");
@@ -601,8 +612,8 @@ app.post("/api/distancia", auth, async (req, res) => {
     if (!base) return res.status(400).json({ error: "Base inválida" });
     if (!origenTexto) return res.status(400).json({ error: "Ingrese la ubicación de origen" });
     const baseTexto = [base.base, base.zona, "Argentina"].filter(Boolean).join(", ");
-    const [baseCoord, origenCoord] = await Promise.all([geocodeGoogle(baseTexto), geocodeGoogle(origenTexto + ", Argentina")]);
-    const km = await routeKmGoogle(baseCoord, origenCoord);
+    const [baseCoord, origenCoord] = await Promise.all([geocodeTomTom(baseTexto), geocodeTomTom(origenTexto + ", Argentina")]);
+    const km = await routeKmTomTom(baseCoord, origenCoord);
     res.json({ km, desde: baseTexto, hasta: origenTexto });
   } catch (error) {
     res.status(503).json({ error: error.message || "No se pudo calcular la distancia" });
