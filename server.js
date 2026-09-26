@@ -296,13 +296,20 @@ async function geocodeTomTom(address) {
   const context = parts.slice(1).join(", ");
   const intersection = streetPart.match(/^((?:AV(?:ENIDA)?\\.?|CALLE|C\\.?)?\\s*[^,&]+?)\\s+(?:Y|&)\\s+((?:AV(?:ENIDA)?\\.?|CALLE|C\\.?)?\\s*[^,&]+?)$/i);
   const variants = [];
+  const cleanContext = [...new Set(parts.slice(1).map(v=>v.trim()).filter(Boolean).filter((v,i,arr)=>i===0 || v.toLowerCase()!==arr[i-1]?.toLowerCase()))].join(", ");
   if (intersection) {
-    variants.push(intersection[1].trim() + " & " + intersection[2].trim() + (context ? ", " + context : ""));
+    const s1=intersection[1].trim(), s2=intersection[2].trim();
+    const expand=s=>s.replace(/^AV(?:ENIDA)?\\.?\\s*/i,"Avenida ").replace(/^C(?:ALLE)?\\.?\\s*/i,"Calle ");
+    variants.push(s1+" & "+s2+(cleanContext ? ", "+cleanContext : ""));
+    variants.push(expand(s1)+" & "+expand(s2)+(cleanContext ? ", "+cleanContext : ""));
+    variants.push(expand(s1)+" y "+expand(s2)+(cleanContext ? ", "+cleanContext : ""));
+    variants.push(expand(s1)+" esquina "+expand(s2)+(cleanContext ? ", "+cleanContext : ""));
   }
   variants.push(cleaned);
+  if (parts.length > 2) variants.push([parts[0], ...parts.slice(1).filter((v,i,arr)=>i===0 || v.toLowerCase()!==arr[i-1]?.toLowerCase())].join(", "));
   let lastError = "";
   for (const query of [...new Set(variants)]) {
-    const endpoints = intersection ? ["crossStreet", "geocode"] : ["geocode"];
+    const endpoints = ["geocode"];
     for (const endpoint of endpoints) {
       try {
         const url = new URL("https://api.tomtom.com/search/2/" + endpoint + "/" + encodeURIComponent(query) + ".json");
@@ -320,6 +327,7 @@ async function geocodeTomTom(address) {
           const hay = [r?.address?.municipalitySubdivision,r?.address?.municipality,r?.address?.countrySubdivision,r?.address?.freeformAddress].filter(Boolean).join(" ").toLowerCase();
           return requested.some(place => hay.includes(place));
         });
+        if (!response.ok) { console.error("[Asistir24 Maps] TomTom HTTP", response.status, endpoint, query, data?.errorText || data?.error?.description || ""); }
         if (response.ok && hit) {
           console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", hit.position.lat + "," + hit.position.lon, endpoint, hit?.address?.freeformAddress || "");
           return { lat: Number(hit.position.lat), lng: Number(hit.position.lon) };
