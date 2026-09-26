@@ -30,7 +30,7 @@ function validArgentinaPoint(lat, lng) {
 }
 function parseCoordinates(value) {
   const text = String(value || "").trim();
-  const match = text.match(/^\\(?\\s*(-?\\d{1,2}(?:[.,]\\d+)?)\\s*[,;\\s]\\s*(-?\\d{1,3}(?:[.,]\\d+)?)\\s*\\)?$/);
+  const match = text.match(/^\(?\s*(-?\d{1,2}(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*\)?$/);
   if (!match) return null;
   const lat = Number(match[1].replace(",", "."));
   const lng = Number(match[2].replace(",", "."));
