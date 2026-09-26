@@ -316,7 +316,7 @@ async function geocodeTomTom(address) {
         url.searchParams.set("key", tomtomKey());
         url.searchParams.set("countrySet", "AR");
         url.searchParams.set("limit", "5");
-        url.searchParams.set("language", "es-AR");
+        url.searchParams.set("language", "es-ES");
         const response = await fetch(url);
         const data = await response.json();
         const results = Array.isArray(data.results) ? data.results : [];
