@@ -285,19 +285,42 @@ function parseCoordinates(value) {
 async function geocodeTomTom(address) {
   const direct = parseCoordinates(address);
   if (direct) return direct;
-  const url = new URL("https://api.tomtom.com/search/2/geocode/" + encodeURIComponent(String(address || "").trim()) + ".json");
-  url.searchParams.set("key", tomtomKey());
-  url.searchParams.set("countrySet", "AR");
-  url.searchParams.set("limit", "1");
-  url.searchParams.set("language", "es-AR");
-  const response = await fetch(url);
-  const data = await response.json();
-  const position = data.results?.[0]?.position;
-  if (!response.ok || !position || !Number.isFinite(Number(position.lat)) || !Number.isFinite(Number(position.lon))) {
-    throw new Error(data.errorText || "TomTom no pudo localizar: " + address);
+  const raw = String(address || "").trim();
+  const cleaned = raw
+    .replace(/(Calle\\s+[^,]+?\\s+[yY]\\s+Calle\\s+[^,]+?)\\s+0(?=\\s*,|$)/i, "$1")
+    .replace(/\\s+/g, " ").trim();
+  const intersection = cleaned.match(/^\\s*(Calle\\s+[^,]+?)\\s+[yY]\\s+(Calle\\s+[^,]+?)(?:,\\s*(.*))?$/i);
+  const variants = [cleaned];
+  if (intersection) {
+    const locality = intersection[3] ? ", " + intersection[3] : "";
+    variants.unshift(intersection[1] + " & " + intersection[2] + locality);
   }
-  return { lat: Number(position.lat), lng: Number(position.lon) };
+  let lastError = "";
+  for (const query of [...new Set(variants)]) {
+    const endpoints = intersection ? ["crossStreet", "geocode"] : ["geocode"];
+    for (const endpoint of endpoints) {
+      try {
+        const url = new URL("https://api.tomtom.com/search/2/" + endpoint + "/" + encodeURIComponent(query) + ".json");
+        url.searchParams.set("key", tomtomKey());
+        url.searchParams.set("countrySet", "AR");
+        url.searchParams.set("limit", "5");
+        url.searchParams.set("language", "es-AR");
+        const response = await fetch(url);
+        const data = await response.json();
+        const results = Array.isArray(data.results) ? data.results : [];
+        const hit = results.find(r => Number.isFinite(Number(r?.position?.lat)) && Number.isFinite(Number(r?.position?.lon)));
+        if (response.ok && hit) {
+          console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", hit.position.lat + "," + hit.position.lon, endpoint);
+          return { lat: Number(hit.position.lat), lng: Number(hit.position.lon) };
+        }
+        lastError = data.errorText || "";
+      } catch (error) { lastError = error.message; }
+    }
+  }
+  throw new Error(lastError || "TomTom no pudo localizar: " + cleaned);
 }
+// Compatibilidad temporal con rutas antiguas inyectadas en runtime.
+const geocodeGoogle = geocodeTomTom;
 async function routeKmTomTom(origin, destination) {
   const points = `${origin.lat},${origin.lng}:${destination.lat},${destination.lng}`;
   const url = new URL("https://api.tomtom.com/routing/1/calculateRoute/" + points + "/json");
