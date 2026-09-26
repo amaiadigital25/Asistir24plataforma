@@ -320,12 +320,17 @@ async function geocodeTomTom(address) {
         const response = await fetch(url);
         const data = await response.json();
         const results = Array.isArray(data.results) ? data.results : [];
-        const requested = parts.slice(1).map(x=>x.toLowerCase()).filter(x=>x && !/^(argentina|buenos aires|provincia de buenos aires)$/.test(x));
+        const normalizePlace = v => String(v||"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+        const requested = parts.slice(1).map(normalizePlace).filter(x=>x && !/^(argentina|buenos aires|provincia de buenos aires)$/.test(x));
         const valid = results.filter(r => Number.isFinite(Number(r?.position?.lat)) && Number.isFinite(Number(r?.position?.lon)));
         const hit = valid.find(r => {
           if (!requested.length) return true;
-          const hay = [r?.address?.municipalitySubdivision,r?.address?.municipality,r?.address?.countrySubdivision,r?.address?.freeformAddress].filter(Boolean).join(" ").toLowerCase();
-          return requested.some(place => hay.includes(place));
+          const hay = normalizePlace([r?.address?.municipalitySubdivision,r?.address?.municipality,r?.address?.countrySecondarySubdivision,r?.address?.countrySubdivision,r?.address?.freeformAddress].filter(Boolean).join(" "));
+          return requested.some(place => hay.includes(place) || place.includes(hay));
+        }) || valid.find(r => {
+          const country = String(r?.address?.countryCodeISO3 || r?.address?.countryCode || "").toUpperCase();
+          const province = normalizePlace(r?.address?.countrySubdivision || "");
+          return (country==="ARG" || country==="AR") && province.includes("buenos aires");
         });
         if (!response.ok) { console.error("[Asistir24 Maps] TomTom HTTP", response.status, endpoint, query, data?.errorText || data?.error?.description || ""); }
         if (response.ok && hit) {
