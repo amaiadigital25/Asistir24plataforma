@@ -287,14 +287,19 @@ async function geocodeTomTom(address) {
   if (direct) return direct;
   const raw = String(address || "").trim();
   const cleaned = raw
-    .replace(/(Calle\\s+[^,]+?\\s+[yY]\\s+Calle\\s+[^,]+?)\\s+0(?=\\s*,|$)/i, "$1")
-    .replace(/\\s+/g, " ").trim();
-  const intersection = cleaned.match(/^\\s*(Calle\\s+[^,]+?)\\s+[yY]\\s+(Calle\\s+[^,]+?)(?:,\\s*(.*))?$/i);
-  const variants = [cleaned];
+    .replace(/\\s+/g, " ")
+    .replace(/\\s+0(?=\\s*,|$)/g, "")
+    .replace(/\\s*,\\s*/g, ", ")
+    .trim();
+  const parts = cleaned.split(",").map(v => v.trim()).filter(Boolean);
+  const streetPart = parts[0] || "";
+  const context = parts.slice(1).join(", ");
+  const intersection = streetPart.match(/^((?:AV(?:ENIDA)?\\.?|CALLE|C\\.?)?\\s*[^,&]+?)\\s+(?:Y|&)\\s+((?:AV(?:ENIDA)?\\.?|CALLE|C\\.?)?\\s*[^,&]+?)$/i);
+  const variants = [];
   if (intersection) {
-    const locality = intersection[3] ? ", " + intersection[3] : "";
-    variants.unshift(intersection[1] + " & " + intersection[2] + locality);
+    variants.push(intersection[1].trim() + " & " + intersection[2].trim() + (context ? ", " + context : ""));
   }
+  variants.push(cleaned);
   let lastError = "";
   for (const query of [...new Set(variants)]) {
     const endpoints = intersection ? ["crossStreet", "geocode"] : ["geocode"];
@@ -308,12 +313,19 @@ async function geocodeTomTom(address) {
         const response = await fetch(url);
         const data = await response.json();
         const results = Array.isArray(data.results) ? data.results : [];
-        const hit = results.find(r => Number.isFinite(Number(r?.position?.lat)) && Number.isFinite(Number(r?.position?.lon)));
+        const requested = parts.slice(1).map(x=>x.toLowerCase()).filter(x=>x && !/^(argentina|buenos aires|provincia de buenos aires)$/.test(x));
+        const valid = results.filter(r => Number.isFinite(Number(r?.position?.lat)) && Number.isFinite(Number(r?.position?.lon)));
+        const hit = valid.find(r => {
+          if (!requested.length) return true;
+          const hay = [r?.address?.municipalitySubdivision,r?.address?.municipality,r?.address?.countrySubdivision,r?.address?.freeformAddress].filter(Boolean).join(" ").toLowerCase();
+          return requested.some(place => hay.includes(place));
+        });
         if (response.ok && hit) {
-          console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", hit.position.lat + "," + hit.position.lon, endpoint);
+          console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", hit.position.lat + "," + hit.position.lon, endpoint, hit?.address?.freeformAddress || "");
           return { lat: Number(hit.position.lat), lng: Number(hit.position.lon) };
         }
-        lastError = data.errorText || "";
+        if (response.ok && valid.length && requested.length) lastError = "TomTom devolvió resultados fuera de la localidad solicitada";
+        else lastError = data.errorText || "";
       } catch (error) { lastError = error.message; }
     }
   }
