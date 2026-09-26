@@ -20,4 +20,25 @@ function openBase(b={}){$("baseForm").hidden=false;$("baseEditId").value=b.id||"
 $("newBase").onclick=()=>openBase();$("cancelBase").onclick=()=>{$("baseForm").hidden=true};
 $("baseForm").addEventListener("submit",async e=>{e.preventDefault();const id=$("baseEditId").value,payload={prestador:$("basePrestador").value,base:$("baseNombre").value,direccion:$("baseDireccion").value,lat:$("baseLat").value,lng:$("baseLng").value,zona:$("baseZona").value,modalidad:$("baseModalidad").value,tipo:$("baseTipo").value,estado:$("baseEstado").value};try{await api(id?`/api/bases/${id}`:"/api/bases",{method:id?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});$("baseForm").hidden=true;await loadBases()}catch(err){$("baseMessage").textContent=err.message}});
 $("baseRows").addEventListener("click",async e=>{const b=e.target.closest("[data-base-action]");if(!b)return;const item=bases.find(x=>x.id===b.dataset.id);if(!item)return;if(b.dataset.baseAction==="edit")return openBase(item);if(b.dataset.baseAction==="delete"&&confirm(`¿Eliminar la base ${item.base} de ${item.prestador}?`)){try{await api(`/api/bases/${item.id}`,{method:"DELETE"});await loadBases()}catch(err){alert(err.message)}}});
-(async()=>{try{const me=await api("/api/me");if(me.role!=="admin")return location.href="/app.html";$("who").textContent=me.user;await Promise.all([loadUsers(),loadGmail(),loadBases()]);if(new URLSearchParams(location.search).get("gmail")==="connected")$("gmailMessage").textContent="Gmail conectado correctamente."}catch(err){console.error(err)}})();
+(async()=>{try{const me=await api("/api/me");if(me.role!=="admin")return location.href="/app.html";$("who").textContent=me.user;await Promise.all([loadUsers(),loadGmail(),loadBases(),loadHistory()]);if(new URLSearchParams(location.search).get("gmail")==="connected")$("gmailMessage").textContent="Gmail conectado correctamente."}catch(err){console.error(err)}})();
+let historyType="recibidos",historyPage=1,historyPages=1;
+const dateTimeLabel=iso=>iso?new Intl.DateTimeFormat("es-AR",{dateStyle:"short",timeStyle:"short"}).format(new Date(iso)):"—";
+async function loadHistory(type=historyType,page=historyPage){
+  historyType=type;historyPage=page;
+  const m=$("historyMessage");if(m)m.textContent="Cargando historial...";
+  try{
+    const r=await api(`/api/admin/historial?tipo=${encodeURIComponent(historyType)}&page=${historyPage}`);
+    historyPage=r.page;historyPages=r.pages;
+    $("historyRows").innerHTML=(r.items||[]).map(x=>`<tr><td>${esc(dateTimeLabel(x.fecha))}</td><td><strong>${esc(x.numeroServicio||x.id)}</strong><br><small>${esc(x.patente||"")}</small></td><td>${esc(x.empresa||"—")}</td><td>${esc(x.origen||"—")}<br><small>→ ${esc(x.destino||"—")}</small></td><td>${esc(x.operador||"—")}</td><td>${esc(x.prestador||"—")}<br><small>${esc(x.base||"")}</small></td><td><span class="status">${esc(x.estado||"—")}</span></td></tr>`).join("")||'<tr><td colspan="7" class="muted">No hay servicios para mostrar.</td></tr>';
+    $("historyCount").textContent=`${r.total} servicios · mostrando de a 10`;
+    $("historyPage").textContent=`${historyPage} / ${historyPages}`;
+    $("historyPrev").disabled=historyPage<=1;$("historyNext").disabled=historyPage>=historyPages;
+    $("historyReceived").className="btn "+(historyType==="recibidos"?"primary":"ghost")+" small";
+    $("historyDispatched").className="btn "+(historyType==="despachados"?"primary":"ghost")+" small";
+    m.textContent="";
+  }catch(err){m.textContent=err.message}
+}
+$("historyReceived")?.addEventListener("click",()=>loadHistory("recibidos",1));
+$("historyDispatched")?.addEventListener("click",()=>loadHistory("despachados",1));
+$("historyPrev")?.addEventListener("click",()=>historyPage>1&&loadHistory(historyType,historyPage-1));
+$("historyNext")?.addEventListener("click",()=>historyPage<historyPages&&loadHistory(historyType,historyPage+1));
