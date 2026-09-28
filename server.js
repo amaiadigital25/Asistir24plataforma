@@ -833,12 +833,12 @@ app.get("/api/admin/historial", auth, adminOnly, (req, res) => {
   if (tipo === "despachados") {
     items = items.filter(item => {
       const flujo = ensureWorkflow(item);
-      return Boolean(flujo.whatsappEnviadoAt || flujo.enServicioAt || flujo.finalizadoAt || ["ENVIADO_WHATSAPP","EN_SERVICIO","FINALIZADO"].includes(flujo.estado));
+      return Boolean(flujo.whatsappListoAt || flujo.whatsappEnviadoAt || flujo.enServicioAt || flujo.finalizadoAt || ["LISTO_PARA_WHATSAPP","ENVIADO_WHATSAPP","EN_SERVICIO","FINALIZADO"].includes(flujo.estado));
     });
   }
   items.sort((a, b) => {
-    const fa = tipo === "despachados" ? (a.flujo?.whatsappEnviadoAt || a.flujo?.enServicioAt || a.flujo?.finalizadoAt || a.fecha) : (a.gmail?.receivedAt || a.fecha);
-    const fb = tipo === "despachados" ? (b.flujo?.whatsappEnviadoAt || b.flujo?.enServicioAt || b.flujo?.finalizadoAt || b.fecha) : (b.gmail?.receivedAt || b.fecha);
+    const fa = tipo === "despachados" ? (a.flujo?.whatsappListoAt || a.flujo?.whatsappEnviadoAt || a.flujo?.enServicioAt || a.flujo?.finalizadoAt || a.fecha) : (a.gmail?.receivedAt || a.fecha);
+    const fb = tipo === "despachados" ? (b.flujo?.whatsappListoAt || b.flujo?.whatsappEnviadoAt || b.flujo?.enServicioAt || b.flujo?.finalizadoAt || b.fecha) : (b.gmail?.receivedAt || b.fecha);
     return Date.parse(fb || 0) - Date.parse(fa || 0);
   });
   const total = items.length;
@@ -848,7 +848,7 @@ app.get("/api/admin/historial", auth, adminOnly, (req, res) => {
   const pageItems = items.slice(start, start + limit).map(item => ({
     id: item.id,
     numeroServicio: item.numeroServicio || "",
-    fecha: tipo === "despachados" ? (item.flujo?.whatsappEnviadoAt || item.flujo?.enServicioAt || item.flujo?.finalizadoAt || item.fecha) : (item.gmail?.receivedAt || item.fecha),
+    fecha: tipo === "despachados" ? (item.flujo?.whatsappListoAt || item.flujo?.whatsappEnviadoAt || item.flujo?.enServicioAt || item.flujo?.finalizadoAt || item.fecha) : (item.gmail?.receivedAt || item.fecha),
     empresa: item.empresa || "",
     origen: item.origen || "",
     destino: item.destino || "",
