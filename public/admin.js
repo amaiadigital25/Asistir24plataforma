@@ -29,7 +29,7 @@ async function loadHistory(type=historyType,page=historyPage){
   try{
     const r=await api(`/api/admin/historial?tipo=${encodeURIComponent(historyType)}&page=${historyPage}`);
     historyPage=r.page;historyPages=r.pages;
-    $("historyRows").innerHTML=(r.items||[]).map(x=>`<tr><td>${esc(dateTimeLabel(x.fecha))}</td><td><strong>${esc(x.numeroServicio||x.id)}</strong><br><small>${esc(x.patente||"")}</small></td><td>${esc(x.empresa||"—")}</td><td>${esc(x.origen||"—")}<br><small>→ ${esc(x.destino||"—")}</small></td><td>${esc(x.operador||"—")}</td><td>${esc(x.prestador||"—")}<br><small>${esc(x.base||"")}</small></td><td><span class="status">${esc(x.estado||"—")}</span></td></tr>`).join("")||'<tr><td colspan="7" class="muted">No hay servicios para mostrar.</td></tr>';
+    $("historyRows").innerHTML=(r.items||[]).map(x=>`<tr><td>${esc(dateTimeLabel(x.fecha))}</td><td><strong>${esc(x.numeroServicio||x.id)}</strong><br><small>${esc(x.patente||"")}</small></td><td>${esc(x.empresa||"—")}</td><td>${esc(x.origen||"—")}<br><small>→ ${esc(x.destino||"—")}</small></td><td>${esc(x.operador||"—")}</td><td>${esc(x.prestador||"—")}<br><small>${esc(x.base||"")}</small></td><td><span class="status">${esc(x.estado||"—")}</span></td><td><button class="btn ghost tiny" type="button" data-history-detail="${esc(x.id)}">🔎 Ver detalle</button></td></tr>`).join("")||'<tr><td colspan="8" class="muted">No hay servicios para mostrar.</td></tr>';
     $("historyCount").textContent=`${r.total} servicios · mostrando de a 10`;
     $("historyPage").textContent=`${historyPage} / ${historyPages}`;
     $("historyPrev").disabled=historyPage<=1;$("historyNext").disabled=historyPage>=historyPages;
@@ -42,3 +42,18 @@ $("historyReceived")?.addEventListener("click",()=>loadHistory("recibidos",1));
 $("historyDispatched")?.addEventListener("click",()=>loadHistory("despachados",1));
 $("historyPrev")?.addEventListener("click",()=>historyPage>1&&loadHistory(historyType,historyPage-1));
 $("historyNext")?.addEventListener("click",()=>historyPage<historyPages&&loadHistory(historyType,historyPage+1));
+const arsHistory=n=>new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(Number(n||0));
+function historyField(label,value){return `<div class="role-note"><strong>${esc(label)}</strong><span>${esc(value==null||value===""?"—":value)}</span></div>`}
+async function openHistoryDetail(id){
+  const dialog=$("historyDetailDialog"),body=$("historyDetailBody");
+  body.innerHTML='<p class="muted">Cargando servicio completo...</p>';dialog.showModal();
+  try{
+    const q=await api(`/api/cotizaciones/${encodeURIComponent(id)}`);
+    $("historyDetailTitle").textContent=`Servicio ${q.numeroServicio||q.id}`;
+    const tr=q.tramos||{},tar=q.tarifa||{},fac=q.facturacion||{},flujo=q.flujo||{};
+    body.innerHTML=`<div class="admin-grid"><article class="card"><p class="eyebrow">DATOS DEL SERVICIO</p>${historyField("Compañía",q.empresa)}${historyField("Asegurado",q.asegurado)}${historyField("Patente",q.patente)}${historyField("Vehículo",[q.marca,q.modelo,q.color].filter(Boolean).join(" "))}${historyField("Tipo de servicio",q.tipoServicio)}${historyField("Origen",q.origen)}${historyField("Destino",q.destino)}</article><article class="card"><p class="eyebrow">BASE Y RECORRIDO</p>${historyField("Prestador",q.base?.prestador)}${historyField("Base",q.base?.base)}${historyField("Base → Origen",Number(tr.baseOrigen||0).toFixed(1)+" km")}${historyField("Origen → Destino",Number(tr.origenDestino||0).toFixed(1)+" km")}${historyField("Destino → Base",Number(tr.destinoBase||0).toFixed(1)+" km")}${historyField("KM totales",Number(q.kmTotal||0).toFixed(1)+" km")}</article><article class="card"><p class="eyebrow">MONTOS</p>${historyField("Movida",arsHistory(tar.movida))}${historyField("Valor por km",arsHistory(tar.km))}${historyField("Subtotal kilómetros",arsHistory(q.subtotalKm))}${historyField("TOTAL COTIZADO",arsHistory(q.total))}${historyField("Estado facturación",fac.estado)}${historyField("Factura",fac.facturaNumero)}</article><article class="card"><p class="eyebrow">CONTROL OPERATIVO</p>${historyField("Estado",flujo.estado)}${historyField("Operador",q.operador||flujo.updatedBy)}${historyField("Confirmado",dateTimeLabel(flujo.confirmadoAt))}${historyField("Listo WhatsApp",dateTimeLabel(flujo.whatsappListoAt))}${historyField("WhatsApp enviado",dateTimeLabel(flujo.whatsappEnviadoAt))}${historyField("Actualizado",dateTimeLabel(flujo.updatedAt))}</article></div><article class="card" style="margin-top:12px"><p class="eyebrow">REMITO</p><pre style="white-space:pre-wrap">${esc(q.remito?.texto||"Sin remito")}</pre></article><article class="card" style="margin-top:12px"><p class="eyebrow">HISTORIAL DEL FLUJO</p>${(flujo.historial||[]).map(h=>historyField(dateTimeLabel(h.fecha),`${h.desde||"—"} → ${h.hacia||"—"} · ${h.usuario||"sistema"} · ${h.detalle||""}`)).join("")||'<p class="muted">Sin movimientos registrados.</p>'}</article>`;
+  }catch(err){body.innerHTML=`<p class="message">${esc(err.message)}</p>`}
+}
+$("historyRows")?.addEventListener("click",e=>{const b=e.target.closest("[data-history-detail]");if(b)openHistoryDetail(b.dataset.historyDetail)});
+$("closeHistoryDetail")?.addEventListener("click",()=>$("historyDetailDialog").close());
+
