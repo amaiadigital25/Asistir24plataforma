@@ -19,8 +19,8 @@ if (!process.env.JWT_SECRET) console.warn("[Asistir24] JWT_SECRET no configurado
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const FALLBACK_SALT = "939d696df209329913ecaa38ae8b0ca2";
 const FALLBACK_HASH = "e260eb5c451c4702ca7b611408f2aff4125c08384d012ce6f158a0c513f3f9f766270bbd9e26723ed59bb3251a5f6f247b93a6b79226eb0d6924cf3ca2e46939";
-const TARIFA_COMPANIA = Object.freeze({ movida: 43989, km: 1199, moneda: "ARS", configured: true });
-const TARIFA_PARTICULAR = Object.freeze({ movida: 60000, km: 2000, moneda: "ARS", configured: true });
+const TARIFA_COMPANIA = Object.freeze({ movida: 49000, km: 1450, moneda: "ARS", configured: true });
+const TARIFA_PARTICULAR = Object.freeze({ movida: 70000, km: 3000, moneda: "ARS", configured: true });
 const TARIFAS = Object.freeze({ COMPANIA: TARIFA_COMPANIA, PARTICULAR: TARIFA_PARTICULAR });
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "database.json");
 const FACTURACION_ESTADOS = ["PENDIENTE", "LISTO_PARA_FACTURAR", "FACTURADO", "COBRADO"];
