@@ -369,10 +369,12 @@ async function quoteFromMail(parsed, gmailMeta) {
   const tipoServicio = parsed.tipoServicio || "Liviano";
   const tarifa = TARIFA_COMPANIA;
   const baseTexto = [base.base, base.zona, "Argentina"].filter(Boolean).join(", ");
-  const [baseCoord, origenCoord] = await Promise.all([
-    geocodeTomTom(baseTexto),
-    geocodeTomTom(parsed.origen + ", Argentina")
-  ]);
+  const baseLat = Number(base?.lat);
+  const baseLng = Number(base?.lng);
+  const baseCoord = Number.isFinite(baseLat) && Number.isFinite(baseLng) && baseLat >= -90 && baseLat <= 90 && baseLng >= -180 && baseLng <= 180
+    ? { lat: baseLat, lng: baseLng }
+    : await geocodeTomTom(baseTexto);
+  const origenCoord = await geocodeTomTom(parsed.origen + ", Argentina");
   const k1 = await routeKmTomTom(baseCoord, origenCoord);
   let k2 = 0;
   let k3 = 0;
@@ -898,26 +900,3 @@ app.patch("/api/cotizaciones/:id/facturacion", auth, adminOnly, (req, res) => {
   res.json({ success: true, cotizacion: q });
 });
 app.post(["/emergencia", "/api/emergencia"], auth, (req, res) => {
-  const { patente, modelo, color, ubicacion } = req.body || {};
-  const nueva = { id: "EM-" + Date.now(), fecha: new Date().toISOString(), patente: String(patente || ""), modelo: String(modelo || ""), color: String(color || ""), ubicacion: String(ubicacion || "") };
-  emergencias.unshift(nueva);
-  emergencias = emergencias.slice(0, 500);
-  saveCollection("emergencias", emergencias);
-  res.json({ ok: true, emergencia: nueva });
-});
-app.get(["/emergencias", "/api/emergencias"], auth, (req, res) => res.json({ total: emergencias.length, items: emergencias }));
-
-app.get("/prestador-acceso", (req, res) => res.sendFile(path.join(__dirname, "public", "prestador-acceso.html")));
-app.get("/prestador", (req, res) => res.sendFile(path.join(__dirname, "public", "prestador.html")));
-app.get("/prestadores-revision", (req, res) => res.sendFile(path.join(__dirname, "public", "prestadores-revision.html")));
-app.use(express.static(path.join(__dirname, "public"), { index: false, maxAge: "5m" }));
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "login.html")));
-app.get("/admin", (req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
-app.get("/facturacion", (req, res) => res.sendFile(path.join(__dirname, "public", "facturacion.html")));
-app.get("*", (req, res) => res.status(404).json({ error: "Ruta no encontrada" }));
-
-app.listen(PORT, () => console.log("Asistir24 Plataforma Cerrada activa en puerto " + PORT));
-if (GMAIL_AUTO_ENABLED) {
-  setTimeout(() => pollGmail(), 5000);
-  setInterval(() => pollGmail(), GMAIL_POLL_MS).unref();
-}
