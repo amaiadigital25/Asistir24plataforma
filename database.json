@@ -1,4 +1,130 @@
 {
   "users": [],
-  "services": []
+  "services": [],
+  "cotizaciones": [
+    {
+      "id": "COT-1788820130562",
+      "fecha": "2026-09-07T22:28:50.562Z",
+      "operador": "admin",
+      "empresa": "la caja",
+      "numeroServicio": "42245",
+      "patente": "RGH-435",
+      "base": {
+        "id": "hernan-becerra-garin",
+        "prestador": "Hernan Becerra",
+        "base": "Garin",
+        "zona": "ZONA NORTE",
+        "modalidad": "AMBA_CABA"
+      },
+      "tipoServicio": "Semipesado",
+      "origen": "grand bourd",
+      "destino": "pablo nogue",
+      "tramos": {
+        "baseOrigen": 6.1,
+        "origenDestino": 3.3,
+        "destinoBase": 0
+      },
+      "kmTotal": 9.399999999999999,
+      "tarifa": {
+        "movida": 43989,
+        "km": 1199,
+        "moneda": "ARS"
+      },
+      "subtotalKm": 11271,
+      "total": 55260,
+      "facturacion": {
+        "estado": "PENDIENTE",
+        "facturaNumero": "",
+        "fechaFactura": null,
+        "cae": "",
+        "caeVencimiento": null,
+        "observaciones": "",
+        "updatedAt": null,
+        "updatedBy": null
+      }
+    },
+    {
+      "id": "COT-1788820122681",
+      "fecha": "2026-09-07T22:28:42.681Z",
+      "operador": "admin",
+      "empresa": "la caja",
+      "numeroServicio": "42245",
+      "patente": "RGH-435",
+      "base": {
+        "id": "hernan-becerra-garin",
+        "prestador": "Hernan Becerra",
+        "base": "Garin",
+        "zona": "ZONA NORTE",
+        "modalidad": "AMBA_CABA"
+      },
+      "tipoServicio": "Semipesado",
+      "origen": "grand bourd",
+      "destino": "pablo nogue",
+      "tramos": {
+        "baseOrigen": 6.1,
+        "origenDestino": 3.3,
+        "destinoBase": 0
+      },
+      "kmTotal": 9.399999999999999,
+      "tarifa": {
+        "movida": 43989,
+        "km": 1199,
+        "moneda": "ARS"
+      },
+      "subtotalKm": 11271,
+      "total": 55260,
+      "facturacion": {
+        "estado": "PENDIENTE",
+        "facturaNumero": "",
+        "fechaFactura": null,
+        "cae": "",
+        "caeVencimiento": null,
+        "observaciones": "",
+        "updatedAt": null,
+        "updatedBy": null
+      }
+    },
+    {
+      "id": "COT-1788820050803",
+      "fecha": "2026-09-07T22:27:30.803Z",
+      "operador": "admin",
+      "empresa": "la caja",
+      "numeroServicio": "42245",
+      "patente": "RGH-435",
+      "base": {
+        "id": "hernan-becerra-garin",
+        "prestador": "Hernan Becerra",
+        "base": "Garin",
+        "zona": "ZONA NORTE",
+        "modalidad": "AMBA_CABA"
+      },
+      "tipoServicio": "Semipesado",
+      "origen": "pillar",
+      "destino": "campana",
+      "tramos": {
+        "baseOrigen": 6.1,
+        "origenDestino": 3.3,
+        "destinoBase": 0
+      },
+      "kmTotal": 9.399999999999999,
+      "tarifa": {
+        "movida": 43989,
+        "km": 1199,
+        "moneda": "ARS"
+      },
+      "subtotalKm": 11271,
+      "total": 55260,
+      "facturacion": {
+        "estado": "PENDIENTE",
+        "facturaNumero": "",
+        "fechaFactura": null,
+        "cae": "",
+        "caeVencimiento": null,
+        "observaciones": "",
+        "updatedAt": null,
+        "updatedBy": null
+      }
+    }
+  ]
 }
+
