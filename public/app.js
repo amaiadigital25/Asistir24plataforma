@@ -50,12 +50,42 @@ function workflowLabel(estado) {
   return ({MAIL_RECIBIDO:"Mail recibido",PROCESANDO:"Procesando",COTIZACION_LISTA:"Cotización lista",REMITO_LISTO:"Remito listo",ESPERANDO_CONFIRMACION:"Esperando confirmación",CONFIRMADO:"Confirmado",LISTO_PARA_WHATSAPP:"Listo para WhatsApp",ENVIADO_WHATSAPP:"Enviado por WhatsApp",EN_SERVICIO:"En servicio",FINALIZADO:"Finalizado"})[estado] || "Esperando confirmación";
 }
 
+// Función auxiliar: obtiene la tarifa vigente de compañía en zona horaria Buenos Aires
+function getTarifaCompariiaDinamica() {
+  const now = new Date();
+  const buenosairesTz = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(now);
+  
+  const [hourStr] = buenosairesTz.split(':');
+  const hour = Number(hourStr);
+  
+  // 08:00-14:59: movida $45.999 + $1.245/km
+  if (hour >= 8 && hour <= 14) {
+    return { movida: 45999, km: 1245, periodo: "08:00-14:59" };
+  }
+  // 00:00-07:59 y 15:00-23:59: movida $49.000 + $1.450/km
+  return { movida: 49000, km: 1450, periodo: hour >= 15 ? "15:00-23:59" : "00:00-07:59" };
+}
+
+
 function tipoClienteLabel(value) { return String(value || "").toUpperCase() === "PARTICULAR" ? "Particular" : "Compañía"; }
 function updateTarifaPill() {
   if (!appConfig) return;
   const tipo = $("tipoCliente")?.value === "PARTICULAR" ? "PARTICULAR" : "COMPANIA";
-  const tarifa = appConfig.tarifas?.[tipo] || appConfig.tarifa;
-  $("tarifaPill").textContent = `${tipoClienteLabel(tipo)} · ${ars(tarifa.movida)} + ${ars(tarifa.km)}/km`;
+  let tarifa = appConfig.tarifas?.[tipo] || appConfig.tarifa;
+  let periodoText = "";
+  // Si es COMPANIA, mostrar dinámicamente la tarifa vigente y el período horario
+  if (tipo === "COMPANIA") {
+    const dinamica = getTarifaCompariiaDinamica();
+    tarifa = dinamica;
+    periodoText = ` (vigente ${dinamica.periodo})`;
+  }
+  $("tarifaPill").textContent = `${tipoClienteLabel(tipo)} · ${ars(tarifa.movida)} + ${ars(tarifa.km)}/km${periodoText}`;
   const companiaBtn=$("tarifaCompania"), particularBtn=$("tarifaParticular");
   if (companiaBtn && particularBtn) { const p=tipo==="PARTICULAR"; companiaBtn.classList.toggle("primary",!p); companiaBtn.classList.toggle("ghost",p); particularBtn.classList.toggle("primary",p); particularBtn.classList.toggle("ghost",!p); }
 }

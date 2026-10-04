@@ -29,8 +29,36 @@ const GMAIL_EXPECTED_ACCOUNT = process.env.GMAIL_ACCOUNT || "asistir24operadores
 const GMAIL_AUTO_ENABLED = String(process.env.GMAIL_AUTO_ENABLED || "").toLowerCase() === "true";
 const GMAIL_POLL_MS = Math.max(60000, Number(process.env.GMAIL_POLL_MS || 300000));
 
+// Función auxiliar: obtener la hora en Buenos Aires y retornar tarifa dinámica para compañías
+function getTarifaCompariiaPorHora() {
+  const now = new Date();
+  const buenosairesTz = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(now);
+  
+  const [hourStr] = buenosairesTz.split(':');
+  const hour = Number(hourStr);
+  
+  // 08:00-14:59: movida $45.999 + $1.245/km (tarifa reducida)
+  if (hour >= 8 && hour <= 14) {
+    return Object.freeze({ movida: 45999, km: 1245, moneda: "ARS", configured: true, periodo: "08:00-14:59" });
+  }
+  // 00:00-07:59 y 15:00-23:59: movida $49.000 + $1.450/km (tarifa normal)
+  return Object.freeze({ movida: 49000, km: 1450, moneda: "ARS", configured: true, periodo: hour >= 15 ? "15:00-23:59" : "00:00-07:59" });
+}
+
+function getTarifaCompariaVigente() {
+  const conPeriodo = getTarifaCompariiaPorHora();
+  const { periodo, ...sinPeriodo } = conPeriodo;
+  return Object.freeze(sinPeriodo);
+}
+
 function tarifaPorTipoCliente(tipoCliente) {
-  return String(tipoCliente || "").toUpperCase() === "PARTICULAR" ? TARIFAS.PARTICULAR : TARIFAS.COMPANIA;
+  return String(tipoCliente || "").toUpperCase() === "PARTICULAR" ? TARIFAS.PARTICULAR : getTarifaCompariaVigente();
 }
 function readData() {
   try {
