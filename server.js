@@ -315,59 +315,77 @@ async function geocodeTomTom(address) {
   if (direct) return direct;
   const raw = String(address || "").trim();
   const cleaned = raw
-    .replace(/\\s+/g, " ")
-    .replace(/\\s+0(?=\\s*,|$)/g, "")
-    .replace(/\\s*,\\s*/g, ", ")
+    .replace(/\s+/g, " ")
+    .replace(/\s+0(?=\s*,|$)/g, "")
+    .replace(/\s*,\s*/g, ", ")
     .trim();
   const parts = cleaned.split(",").map(v => v.trim()).filter(Boolean);
   const streetPart = parts[0] || "";
-  const context = parts.slice(1).join(", ");
-  const intersection = streetPart.match(/^((?:AV(?:ENIDA)?\\.?|CALLE|C\\.?)?\\s*[^,&]+?)\\s+(?:Y|&)\\s+((?:AV(?:ENIDA)?\\.?|CALLE|C\\.?)?\\s*[^,&]+?)$/i);
-  const variants = [];
-  const cleanContext = [...new Set(parts.slice(1).map(v=>v.trim()).filter(Boolean).filter((v,i,arr)=>i===0 || v.toLowerCase()!==arr[i-1]?.toLowerCase()))].join(", ");
-  if (intersection) {
-    const s1=intersection[1].trim(), s2=intersection[2].trim();
-    const expand=s=>s.replace(/^AV(?:ENIDA)?\\.?\\s*/i,"Avenida ").replace(/^C(?:ALLE)?\\.?\\s*/i,"Calle ");
-    variants.push(s1+" & "+s2+(cleanContext ? ", "+cleanContext : ""));
-    variants.push(expand(s1)+" & "+expand(s2)+(cleanContext ? ", "+cleanContext : ""));
-    variants.push(expand(s1)+" y "+expand(s2)+(cleanContext ? ", "+cleanContext : ""));
-    variants.push(expand(s1)+" esquina "+expand(s2)+(cleanContext ? ", "+cleanContext : ""));
+  const normalizePlace = v => String(v || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const generic = /^(argentina|buenos aires|provincia de buenos aires|zona sur|zona norte|zona oeste|caba|capital federal)$/i;
+  const contextParts = parts.slice(1).map(normalizePlace).filter(v => v && !generic.test(v));
+  const hasStreetNumber = /\b\d+\b/.test(streetPart);
+  const localityHints = contextParts.length ? contextParts : (!hasStreetNumber && streetPart ? [normalizePlace(streetPart)] : []);
+  const variants = [cleaned];
+  if (parts.length > 2) {
+    variants.push([parts[0], ...parts.slice(1).filter((v, i, arr) => i === 0 || v.toLowerCase() !== arr[i - 1]?.toLowerCase())].join(", "));
   }
-  variants.push(cleaned);
-  if (parts.length > 2) variants.push([parts[0], ...parts.slice(1).filter((v,i,arr)=>i===0 || v.toLowerCase()!==arr[i-1]?.toLowerCase())].join(", "));
   let lastError = "";
   for (const query of [...new Set(variants)]) {
-    const endpoints = ["geocode"];
-    for (const endpoint of endpoints) {
-      try {
-        const url = new URL("https://api.tomtom.com/search/2/" + endpoint + "/" + encodeURIComponent(query) + ".json");
-        url.searchParams.set("key", tomtomKey());
-        url.searchParams.set("countrySet", "AR");
-        url.searchParams.set("limit", "5");
-        url.searchParams.set("language", "es-ES");
-        const response = await fetch(url);
-        const data = await response.json();
-        const results = Array.isArray(data.results) ? data.results : [];
-        const normalizePlace = v => String(v||"").normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
-        const requested = parts.slice(1).map(normalizePlace).filter(x=>x && !/^(argentina|buenos aires|provincia de buenos aires)$/.test(x));
-        const valid = results.filter(r => Number.isFinite(Number(r?.position?.lat)) && Number.isFinite(Number(r?.position?.lon)));
-        const hit = valid.find(r => {
-          if (!requested.length) return true;
-          const hay = normalizePlace([r?.address?.municipalitySubdivision,r?.address?.municipality,r?.address?.countrySecondarySubdivision,r?.address?.countrySubdivision,r?.address?.freeformAddress].filter(Boolean).join(" "));
-          return requested.some(place => hay.includes(place) || place.includes(hay));
-        }) || valid.find(r => {
-          const country = String(r?.address?.countryCodeISO3 || r?.address?.countryCode || "").toUpperCase();
-          const province = normalizePlace(r?.address?.countrySubdivision || "");
-          return (country==="ARG" || country==="AR") && province.includes("buenos aires");
-        });
-        if (!response.ok) { console.error("[Asistir24 Maps] TomTom HTTP", response.status, endpoint, query, data?.errorText || data?.error?.description || ""); }
-        if (response.ok && hit) {
-          console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", hit.position.lat + "," + hit.position.lon, endpoint, hit?.address?.freeformAddress || "");
-          return { lat: Number(hit.position.lat), lng: Number(hit.position.lon) };
+    try {
+      const url = new URL("https://api.tomtom.com/search/2/geocode/" + encodeURIComponent(query) + ".json");
+      url.searchParams.set("key", tomtomKey());
+      url.searchParams.set("countrySet", "AR");
+      url.searchParams.set("limit", "10");
+      url.searchParams.set("language", "es-ES");
+      const response = await fetch(url);
+      const data = await response.json();
+      const results = Array.isArray(data.results) ? data.results : [];
+      const valid = results.filter(r => Number.isFinite(Number(r?.position?.lat)) && Number.isFinite(Number(r?.position?.lon)));
+      if (!response.ok) {
+        lastError = data.errorText || data.error?.description || ("TomTom HTTP " + response.status);
+        continue;
+      }
+      const scored = valid.map(r => {
+        const a = r.address || {};
+        const hay = normalizePlace([
+          a.municipalitySubdivision, a.municipality, a.countrySecondarySubdivision,
+          a.countryTertiarySubdivision, a.localName, a.postalName, a.neighborhoodName,
+          a.freeformAddress, a.streetNameAndNumber
+        ].filter(Boolean).join(" "));
+        let score = 0;
+        for (const hint of localityHints) {
+          if (!hint) continue;
+          if (hay.includes(hint)) score += hint.length >= 5 ? 100 : 30;
+          else if (hint.includes(hay) && hay.length >= 5) score += 60;
+          const words = hint.split(" ").filter(w => w.length >= 4);
+          score += words.filter(w => hay.includes(w)).length * 10;
         }
-        if (response.ok && valid.length && requested.length) lastError = "TomTom devolvió resultados fuera de la localidad solicitada";
-        else lastError = data.errorText || "";
-      } catch (error) { lastError = error.message; }
+        const province = normalizePlace(a.countrySubdivision || a.countrySubdivisionName || "");
+        const country = String(a.countryCodeISO3 || a.countryCode || "").toUpperCase();
+        if (country === "ARG" || country === "AR") score += 5;
+        if (province.includes("buenos aires")) score += 5;
+        return { r, score };
+      }).sort((a,b) => b.score - a.score);
+      const best = scored[0];
+      const requiredMatch = !localityHints.length || (best && best.score >= 30);
+      if (best && requiredMatch) {
+        const a = best.r.address || {};
+        console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->",
+          best.r.position.lat + "," + best.r.position.lon,
+          "score", best.score, a.freeformAddress || "");
+        return { lat: Number(best.r.position.lat), lng: Number(best.r.position.lon) };
+      }
+      if (valid.length && localityHints.length) {
+        lastError = "TomTom no encontró una coincidencia confiable para la localidad solicitada";
+      } else if (valid.length) {
+        const r = valid[0];
+        return { lat: Number(r.position.lat), lng: Number(r.position.lon) };
+      }
+    } catch (error) {
+      lastError = error.message;
     }
   }
   throw new Error(lastError || "TomTom no pudo localizar: " + cleaned);
