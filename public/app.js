@@ -95,7 +95,30 @@ function currentModalidad(){ return $("modalidad").value==="INTERIOR"?"INTERIOR"
 function syncModalidadWithBase(){ const base=selectedBase(); if(!base)return; $("modalidad").value=base.modalidad==="INTERIOR"?"INTERIOR":"AMBA_CABA"; }
 function setKmStatus(message,isError=false){ const status=$("kmStatus"); status.textContent=message; status.classList.toggle("error",isError); }
 function invalidateRouteKm(){ const input=$("kmBaseOrigen"); if(input.dataset.auto==="true")input.value=""; input.dataset.auto="false"; delete input.dataset.baseId; delete input.dataset.origen; }
-async function calculateBaseOriginKm({silent=false}={}){ if(!silent)setKmStatus("Cargando el servicio de cálculo de rutas..."); return false; }
+async function calculateBaseOriginKm({silent=false}={}){
+  const base=selectedBase();
+  const origen=$("origen").value.trim();
+  const input=$("kmBaseOrigen");
+  if(!base||!origen)return false;
+  const baseId=base.id;
+  const cachedBaseId=input.dataset.baseId;
+  const cachedOrigen=input.dataset.origen;
+  if(input.dataset.auto==="true"&&cachedBaseId===baseId&&cachedOrigen===origen&&input.value)return true;
+  if(!silent)setKmStatus("Calculando ruta real...");
+  try{
+    const data=await api("/api/ruta-completa",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({baseId,modalidad:currentModalidad(),tipoServicio:$("tipoServicio").value,origen,destino:$("destino").value})});
+    input.value=Number(data.tramos?.baseOrigen||0).toFixed(1);
+    input.dataset.auto="true";
+    input.dataset.baseId=baseId;
+    input.dataset.origen=origen;
+    if(!silent)setKmStatus("Ruta calculada correctamente.");
+    return true;
+  }catch(error){
+    input.dataset.auto="false";
+    if(!silent)setKmStatus(error.message,true);
+    return false;
+  }
+}
 function updateRouteUI(){ const base=selectedBase(); if(!base)return; const modalidad=currentModalidad(), auxilio=isAuxilioMecanico($("tipoServicio").value); $("routeRule").textContent=routeLabel(modalidad,$("tipoServicio").value); $("destinationWrap").style.display=auxilio?"none":"grid"; $("kmOriginDestinationWrap").style.display=auxilio?"none":"grid"; $("destino").required=!auxilio; $("kmOrigenDestino").required=!auxilio; $("returnWrap").style.display=!auxilio&&modalidad==="INTERIOR"?"grid":"none"; $("kmDestinoBase").required=!auxilio&&modalidad==="INTERIOR"; if(auxilio){$("destino").value="";$("kmOrigenDestino").value="";$("kmDestinoBase").value="";}else if(modalidad!=="INTERIOR")$("kmDestinoBase").value=""; }
 function baseLabel(b){return `${b.base} - ${b.prestador} (${b.zona})`}
 function syncBaseFromText(){const text=$("baseSearchInput").value.trim().toLowerCase();const b=bases.find(x=>baseLabel(x).toLowerCase()===text)||bases.find(x=>x.base.toLowerCase()===text)||bases.find(x=>baseLabel(x).toLowerCase().includes(text));$("baseId").value=b?.id||"";return b}
