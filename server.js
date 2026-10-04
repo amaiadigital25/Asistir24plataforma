@@ -695,6 +695,47 @@ app.post("/api/distancia", auth, async (req, res) => {
     res.status(503).json({ error: error.message || "No se pudo calcular la distancia" });
   }
 });
+const ROUTING_CACHE = new Map();
+const GEOCODE_CACHE = new Map();
+const ROUTING_CACHE_TTL = 10 * 60 * 1000;
+function cacheGet(cache,key){const hit=cache.get(key);if(!hit)return null;if(Date.now()-hit.at>ROUTING_CACHE_TTL){cache.delete(key);return null;}return hit.value;}
+function cachePut(cache,key,value){if(cache.size>=2000)cache.delete(cache.keys().next().value);cache.set(key,{at:Date.now(),value});return value;}
+async function geocodeCached(text){const key=String(text||"").trim().toLowerCase();const hit=cacheGet(GEOCODE_CACHE,key);if(hit)return hit;return cachePut(GEOCODE_CACHE,key,await geocodeTomTom(text));}
+async function routeCached(a,b){const key=String(a.lat.toFixed(5))+","+String(a.lng.toFixed(5))+">"+String(b.lat.toFixed(5))+","+String(b.lng.toFixed(5));const hit=cacheGet(ROUTING_CACHE,key);if(hit!==null)return hit;return cachePut(ROUTING_CACHE,key,await routeKmTomTom(a,b));}
+app.post("/api/ruta-completa", auth, async (req,res) => {
+  try {
+    const base=getBases().find(item=>item.id===req.body?.baseId);
+    const origenTexto=String(req.body?.origen||"").trim();
+    const destinoTexto=String(req.body?.destino||"").trim();
+    const modalidad=req.body?.modalidad==="INTERIOR"?"INTERIOR":(base?.modalidad==="INTERIOR"?"INTERIOR":"AMBA_CABA");
+    const tipoServicio=String(req.body?.tipoServicio||"").trim();
+    const auxilio=tipoServicio.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")==="auxilio mecanico";
+    if(!base)return res.status(400).json({error:"Base inválida"});
+    if(!origenTexto)return res.status(400).json({error:"Ingrese la ubicación de origen"});
+    if(!auxilio&&!destinoTexto)return res.status(400).json({error:"Ingrese el destino"});
+    const cacheKey=["complete",base.id,modalidad,auxilio?"A":"R",origenTexto.toLowerCase(),destinoTexto.toLowerCase()].join("|");
+    const cached=cacheGet(ROUTING_CACHE,cacheKey);
+    if(cached)return res.json(cached);
+    const baseCoord=Number.isFinite(Number(base.lat))&&Number.isFinite(Number(base.lng))?{lat:Number(base.lat),lng:Number(base.lng)}:null;
+    const baseTexto=[base.direccion||base.base,base.zona,"Argentina"].filter(Boolean).join(", ");
+    const [resolvedBase,origenCoord,destinoCoord]=await Promise.all([
+      baseCoord?Promise.resolve(baseCoord):geocodeCached(baseTexto),
+      geocodeCached(origenTexto+", Argentina"),
+      auxilio?Promise.resolve(null):geocodeCached(destinoTexto+", Argentina")
+    ]);
+    const routes=[routeCached(resolvedBase,origenCoord)];
+    if(!auxilio)routes.push(routeCached(origenCoord,destinoCoord));
+    if(!auxilio&&modalidad==="INTERIOR")routes.push(routeCached(destinoCoord,resolvedBase));
+    const values=await Promise.all(routes);
+    const tramos={baseOrigen:Number(values[0]||0),origenDestino:auxilio?0:Number(values[1]||0),destinoBase:(!auxilio&&modalidad==="INTERIOR")?Number(values[2]||0):0};
+    const result={success:true,modalidad,auxilio,baseDireccion:baseTexto,tramos,kmTotal:Math.round((tramos.baseOrigen+tramos.origenDestino+tramos.destinoBase)*10)/10,coordenadas:{base:resolvedBase,origen:origenCoord,destino:destinoCoord}};
+    cachePut(ROUTING_CACHE,cacheKey,result);
+    res.json(result);
+  } catch(error) {
+    console.error("[Asistir24 Ruta]",error.message);
+    res.status(503).json({error:error.message||"No se pudo calcular el recorrido"});
+  }
+});
 app.post("/api/bases", auth, adminOnly, (req, res) => {
   const { prestador, base, zona, modalidad, estado, tipo, direccion, lat, lng } = req.body || {};
   if (!String(prestador || "").trim() || !String(base || "").trim()) return res.status(400).json({ error: "Prestador y base son obligatorios" });
