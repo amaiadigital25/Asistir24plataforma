@@ -365,7 +365,7 @@ async function geocodeTomTom(address) {
           console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", hit.position.lat + "," + hit.position.lon, endpoint, hit?.address?.freeformAddress || "");
           return { lat: Number(hit.position.lat), lng: Number(hit.position.lon) };
         }
-        if (response.ok && valid.length && requested.length) lastError = "TomTom devolvió resultados fuera de la localidad solicitada";
+        if (response.ok && valid.length && requested.length) lastError = "TomTom no pudo confirmar la localidad, pero se conservaron los resultados válidos";
         else lastError = data.errorText || "";
       } catch (error) { lastError = error.message; }
     }
