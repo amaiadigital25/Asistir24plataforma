@@ -674,8 +674,8 @@ app.post("/api/gmail/sync", auth, adminOnly, async (req, res) => {
 
 app.get("/api/config", auth, (req, res) => {
   res.json({
-    tarifa: TARIFA_COMPANIA,
-    tarifas: TARIFAS,
+    tarifa: getTarifaCompariaVigente(),
+    tarifas: { COMPANIA: getTarifaCompariaVigente(), PARTICULAR: TARIFA_PARTICULAR },
     reglas: { AMBA_CABA: "Base -> Origen -> Destino", INTERIOR: "Base -> Origen -> Destino -> Base", AUXILIO_MECANICO: "Base -> Origen" },
     tiposServicio: ["Liviano", "Moto", "Auxilio mecanico", "Semipesado"],
     notaDistancias: "Los kilómetros Base-Origen se calculan automáticamente con Google Maps a partir de la base y la ubicación ingresada."
@@ -748,8 +748,8 @@ app.get("/api/resumen", auth, (req, res) => {
     },
     cotizaciones: cotizaciones.length,
     facturacion: billing,
-    tarifa: TARIFA_COMPANIA,
-    tarifas: TARIFAS
+    tarifa: getTarifaCompariaVigente(),
+    tarifas: { COMPANIA: getTarifaCompariaVigente(), PARTICULAR: TARIFA_PARTICULAR }
   });
 });
 app.post("/api/cotizar", auth, (req, res) => {
