@@ -359,7 +359,7 @@ async function geocodeTomTom(address) {
           const country = String(r?.address?.countryCodeISO3 || r?.address?.countryCode || "").toUpperCase();
           const province = normalizePlace(r?.address?.countrySubdivision || "");
           return (country==="ARG" || country==="AR") && province.includes("buenos aires");
-        });
+        }) || valid[0];
         if (!response.ok) { console.error("[Asistir24 Maps] TomTom HTTP", response.status, endpoint, query, data?.errorText || data?.error?.description || ""); }
         if (response.ok && hit) {
           console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", hit.position.lat + "," + hit.position.lon, endpoint, hit?.address?.freeformAddress || "");
