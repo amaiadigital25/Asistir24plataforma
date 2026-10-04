@@ -10,6 +10,7 @@
     input.dataset.auto = "false";
     delete input.dataset.baseId;
     delete input.dataset.origen;
+    delete input.dataset.routeKey;
   }
   function mapButton(show=false) {
     const b = $("openRouteMap");
