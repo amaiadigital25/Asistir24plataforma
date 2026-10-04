@@ -47,7 +47,7 @@ function patchLocationApi(source) {
     'async function geocodeCached(text) { const key = String(text || "").trim().toLowerCase(); const hit = cacheGet(GEOCODE_CACHE, key); if (hit) return hit; return cachePut(GEOCODE_CACHE, key, await geocodeTomTom(text)); }',
     'async function routeCached(a, b) { const key = String(a.lat.toFixed(5)) + "," + String(a.lng.toFixed(5)) + ">" + String(b.lat.toFixed(5)) + "," + String(b.lng.toFixed(5)); const hit = cacheGet(ROUTING_CACHE, key); if (hit !== null) return hit; return cachePut(ROUTING_CACHE, key, await routeKmTomTom(a, b)); }',
     'app.post("/api/ruta-completa", auth, async (req, res) => {',
-    '  try {
+    '  try {',
     '    const base = basesDoc.bases.find(item => item.id === req.body?.baseId);',
     '    const origenTexto = String(req.body?.origen || "").trim();',
     '    const destinoTexto = String(req.body?.destino || "").trim();',
@@ -75,7 +75,8 @@ function patchLocationApi(source) {
     '    const destinoBase = (!auxilio && modalidad === "INTERIOR") ? (routeValues[2] || 0) : 0;',
     '    const result = { success: true, modalidad, auxilio, baseDireccion: baseTexto, tramos: { baseOrigen, origenDestino, destinoBase }, kmTotal: Math.round((baseOrigen + origenDestino + destinoBase) * 10) / 10, coordenadas: { base: baseCoord, origen: origenCoord, destino: destinoCoord } };',
     '    cachePut(ROUTING_CACHE, "complete:" + cacheKey, result);',
-    '    res.json(result);',    '  } catch (error) {',
+    '    res.json(result);',
+    '  } catch (error) {',
     '    res.status(503).json({ error: error.message || "No se pudo calcular el recorrido", mapsFallback: true });',
     '  }',
     '});',
