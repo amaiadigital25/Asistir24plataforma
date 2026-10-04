@@ -672,6 +672,59 @@ app.post("/api/gmail/sync", auth, adminOnly, async (req, res) => {
   res.json({ success: true, ...(await pollGmail({ force: true })) });
 });
 
+function distanciaEnKmAproximada(a, b) {
+  const toRad = value => Number(value) * Math.PI / 180;
+  const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+  const dLat = lat2 - lat1;
+  const dLng = toRad(b.lng) - toRad(a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
+}
+
+app.post("/api/base-mas-cercana", auth, async (req, res) => {
+  try {
+    const origenTexto = String(req.body?.origen || "").trim();
+    const tipoServicio = String(req.body?.tipoServicio || "").trim();
+    if (!origenTexto) return res.status(400).json({ error: "Ingrese la ubicación de origen" });
+
+    const auxilio = tipoServicio.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "auxilio mecanico";
+    const modalidadPreferida = /mendoza|cordoba|córdoba|santa fe|entre rios|entre ríos|misiones|chaco|salta|tucuman|tucumán|la pampa|santa cruz/i.test(origenTexto) ? "INTERIOR" : "AMBA_CABA";
+
+    const origenCoord = await geocodeCached(origenTexto + ", Argentina");
+    const activas = getBases().filter(base =>
+      base.estado === "ACTIVO" &&
+      Number.isFinite(Number(base.lat)) &&
+      Number.isFinite(Number(base.lng))
+    );
+
+    if (!activas.length) return res.status(503).json({ error: "No hay bases activas con coordenadas cargadas" });
+
+    const compatibles = activas.filter(base => base.modalidad === modalidadPreferida);
+    const candidatas = compatibles.length ? compatibles : activas;
+
+    const ordenadas = candidatas
+      .map(base => ({
+        base,
+        kmAproximada: distanciaEnKmAproximada(origenCoord, { lat: Number(base.lat), lng: Number(base.lng) })
+      }))
+      .sort((a, b) => a.kmAproximada - b.kmAproximada);
+
+    const recomendada = ordenadas[0];
+    if (!recomendada) return res.status(503).json({ error: "No se encontró una base cercana" });
+
+    res.json({
+      success: true,
+      recomendada: recomendada.base,
+      kmAproximada: Math.round(recomendada.kmAproximada * 10) / 10,
+      auxilio,
+      origen: origenCoord
+    });
+  } catch (error) {
+    console.error("[Asistir24 Base cercana]", error.message);
+    res.status(503).json({ error: error.message || "No se pudo determinar la base más cercana" });
+  }
+});
+
 app.get("/api/config", auth, (req, res) => {
   res.json({
     tarifa: getTarifaCompariaVigente(),
