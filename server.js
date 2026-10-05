@@ -355,11 +355,7 @@ async function geocodeTomTom(address) {
           if (!requested.length) return true;
           const hay = normalizePlace([r?.address?.municipalitySubdivision,r?.address?.municipality,r?.address?.countrySecondarySubdivision,r?.address?.countrySubdivision,r?.address?.freeformAddress].filter(Boolean).join(" "));
           return requested.some(place => hay.includes(place) || place.includes(hay));
-        }) || valid.find(r => {
-          const country = String(r?.address?.countryCodeISO3 || r?.address?.countryCode || "").toUpperCase();
-          const province = normalizePlace(r?.address?.countrySubdivision || "");
-          return (country==="ARG" || country==="AR") && province.includes("buenos aires");
-        }) || valid[0];
+        }) || null;
         if (!response.ok) { console.error("[Asistir24 Maps] TomTom HTTP", response.status, endpoint, query, data?.errorText || data?.error?.description || ""); }
         if (response.ok && hit) {
           console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", hit.position.lat + "," + hit.position.lon, endpoint, hit?.address?.freeformAddress || "");
@@ -372,8 +368,7 @@ async function geocodeTomTom(address) {
   }
   throw new Error(lastError || "TomTom no pudo localizar: " + cleaned);
 }
-// Compatibilidad temporal con rutas antiguas inyectadas en runtime.
-const geocodeGoogle = geocodeTomTom;
+// TomTom es el único motor geográfico. No existen aliases ni rutas de cálculo Google.
 async function routeKmTomTom(origin, destination) {
   const points = `${origin.lat},${origin.lng}:${destination.lat},${destination.lng}`;
   const url = new URL("https://api.tomtom.com/routing/1/calculateRoute/" + points + "/json");
@@ -396,11 +391,12 @@ async function quoteFromMail(parsed, gmailMeta) {
   const modalidad = base?.modalidad === "INTERIOR" ? "INTERIOR" : "AMBA_CABA";
   const tipoServicio = parsed.tipoServicio || "Liviano";
   const tarifa = TARIFA_COMPANIA;
-  const baseTexto = [base.base, base.zona, "Argentina"].filter(Boolean).join(", ");
-  const [baseCoord, origenCoord] = await Promise.all([
-    geocodeTomTom(baseTexto),
-    geocodeTomTom(parsed.origen + ", Argentina")
-  ]);
+  const baseCoord = Number.isFinite(Number(base.lat)) && Number.isFinite(Number(base.lng))
+    ? { lat: Number(base.lat), lng: Number(base.lng) }
+    : null;
+  if (!baseCoord) throw new Error("La base seleccionada no tiene coordenadas cargadas; no se geocodifica una base ambigua automáticamente");
+  const baseTexto = [base.direccion || base.base, base.zona, "Argentina"].filter(Boolean).join(", ");
+  const origenCoord = await geocodeCached(parsed.origen + ", Argentina");
   const k1 = await routeKmTomTom(baseCoord, origenCoord);
   let k2 = 0;
   let k3 = 0;
@@ -553,7 +549,7 @@ async function pollGmail({ force = false } = {}) {
   }
 }
 
-app.get("/health", (req, res) => res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: getBases().length, version: "gmail-workflow-5-persistent-alert-dedupe", gmailAuto: GMAIL_AUTO_ENABLED }));
+app.get("/health", (req, res) => res.json({ ok: true, app: "Asistir24 Plataforma Cerrada", bases: getBases().length, version: "tomtom-routing-unificado-1", gmailAuto: GMAIL_AUTO_ENABLED }));
 
 app.post(["/login", "/api/login"], (req, res) => {
   const { username, password } = req.body || {};
@@ -731,7 +727,7 @@ app.get("/api/config", auth, (req, res) => {
     tarifas: { COMPANIA: getTarifaCompariaVigente(), PARTICULAR: TARIFA_PARTICULAR },
     reglas: { AMBA_CABA: "Base -> Origen -> Destino", INTERIOR: "Base -> Origen -> Destino -> Base", AUXILIO_MECANICO: "Base -> Origen" },
     tiposServicio: ["Liviano", "Moto", "Auxilio mecanico", "Semipesado"],
-    notaDistancias: "Los kilómetros Base-Origen se calculan automáticamente con Google Maps a partir de la base y la ubicación ingresada."
+    notaDistancias: "Los kilómetros se calculan con TomTom usando las coordenadas cargadas de cada base y geocodificando únicamente origen y destino."
   });
 });
 app.post("/api/distancia", auth, async (req, res) => {
@@ -740,9 +736,12 @@ app.post("/api/distancia", auth, async (req, res) => {
     const origenTexto = String(req.body?.origen || "").trim();
     if (!base) return res.status(400).json({ error: "Base inválida" });
     if (!origenTexto) return res.status(400).json({ error: "Ingrese la ubicación de origen" });
-    const baseTexto = [base.base, base.zona, "Argentina"].filter(Boolean).join(", ");
-    const [baseCoord, origenCoord] = await Promise.all([geocodeTomTom(baseTexto), geocodeTomTom(origenTexto + ", Argentina")]);
-    const km = await routeKmTomTom(baseCoord, origenCoord);
+    const baseCoord = Number.isFinite(Number(base.lat)) && Number.isFinite(Number(base.lng))
+      ? { lat: Number(base.lat), lng: Number(base.lng) }
+      : null;
+    if (!baseCoord) return res.status(409).json({ error: "La base no tiene coordenadas cargadas; no se geocodifica automáticamente para evitar kilómetros incorrectos" });
+    const origenCoord = await geocodeCached(origenTexto + ", Argentina");
+    const km = await routeCached(baseCoord, origenCoord);
     res.json({ km, desde: baseTexto, hasta: origenTexto });
   } catch (error) {
     res.status(503).json({ error: error.message || "No se pudo calcular la distancia" });
