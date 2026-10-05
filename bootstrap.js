@@ -83,7 +83,7 @@ function loadServerWithRuntimeFixes() {
       '    const baseTexto = [base?.direccion || base?.base, base?.zona, "Argentina"].filter(Boolean).join(", ");',
       '    const baseCoord = Number.isFinite(Number(base?.lat)) && Number.isFinite(Number(base?.lng)) ? { lat: Number(base.lat), lng: Number(base.lng) } : null;',
       '    if (!baseCoord) throw new Error("La base seleccionada no tiene coordenadas cargadas");',
-      '    const [baseCoord, origenCoord] = await Promise.all([geocodeTomTom(baseTexto), geocodeTomTom(parsed.origen + ", Argentina")]);',
+      '    const origenCoord = await geocodeTomTom(parsed.origen + ", Argentina");',
       '    const k1 = await routeKmTomTom(baseCoord, origenCoord);',
       '    let k2 = 0; let k3 = 0;',
       '    if (parsed.destino && tipoServicio !== "Auxilio mecanico") {',
