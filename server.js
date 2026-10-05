@@ -740,6 +740,7 @@ app.post("/api/distancia", auth, async (req, res) => {
       ? { lat: Number(base.lat), lng: Number(base.lng) }
       : null;
     if (!baseCoord) return res.status(409).json({ error: "La base no tiene coordenadas cargadas; no se geocodifica automáticamente para evitar kilómetros incorrectos" });
+    const baseTexto = [base.direccion || base.base, base.zona, "Argentina"].filter(Boolean).join(", ");
     const origenCoord = await geocodeCached(origenTexto + ", Argentina");
     const km = await routeCached(baseCoord, origenCoord);
     res.json({ km, desde: baseTexto, hasta: origenTexto });
