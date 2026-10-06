@@ -290,15 +290,46 @@ async function listRecentClaims(token) {
 async function getGmailMessage(token, id) {
   return gmailApi(`messages/${encodeURIComponent(id)}?format=full`, token);
 }
+const LA_PALMA_CORDOBA_BASE = Object.freeze({
+  id: "la-palma-cordoba",
+  prestador: "La Palma Córdoba",
+  base: "La Palma",
+  zona: "CORDOBA",
+  modalidad: "INTERIOR",
+  estado: "ACTIVO",
+  tipo: "Semipesado",
+  direccion: "La Palma, Córdoba, Argentina",
+  lat: -30.2796,
+  lng: -63.6,
+  tomtomFija: true
+});
+
 function findBaseForAddress(address) {
   const text = String(address || "").toLowerCase();
   const active = getBases().filter(b => b.estado === "ACTIVO");
+  const isLaPalmaCordoba = /la\\s+palma/i.test(text) && /cordoba|córdoba/i.test(text);
+  if (isLaPalmaCordoba) {
+    const existing = active.find(b => /la\\s+palma/i.test(String(b.base || "")) && /cordoba|córdoba/i.test(String(b.zona || "")));
+    return existing ? { ...existing, modalidad: "INTERIOR", lat: -30.2796, lng: -63.6, direccion: existing.direccion || LA_PALMA_CORDOBA_BASE.direccion, tomtomFija: true } : LA_PALMA_CORDOBA_BASE;
+  }
   const direct = active.find(b => text.includes(String(b.base || "").toLowerCase())) ||
     active.find(b => text.includes(String(b.zona || "").toLowerCase()));
   if (direct) return direct;
   const interior = /mendoza|cordoba|córdoba|santa fe|entre rios|entre ríos|misiones|chaco|salta|tucuman|tucumán|la pampa|santa cruz/i.test(text);
   return active.find(b => b.modalidad === (interior ? "INTERIOR" : "AMBA_CABA")) || active[0] || getBases()[0];
+}const TOMTOM_GEOCODE_CACHE = new Map();
+const TOMTOM_ROUTE_CACHE = new Map();
+let TOMTOM_NEXT_REQUEST_AT = 0;
+async function waitForTomTomSlot() {
+  const now = Date.now();
+  const wait = Math.max(0, TOMTOM_NEXT_REQUEST_AT - now);
+  TOMTOM_NEXT_REQUEST_AT = Math.max(now, TOMTOM_NEXT_REQUEST_AT) + 600;
+  if (wait) await new Promise(resolve => setTimeout(resolve, wait));
 }
+function tomtomCacheKey(value) {
+  return String(value || "").trim().toLowerCase().replace(/\\s+/g, " ");
+}
+
 function tomtomKey() {
   const key = process.env.TOMTOM_API_KEY || process.env.TOMTOM_KEY;
   if (!key) throw new Error("TomTom todavía no está configurado en el servidor (TOMTOM_API_KEY)");
@@ -311,6 +342,14 @@ function parseCoordinates(value) {
   return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 }
 async function geocodeTomTom(address) {
+  const cacheKey = tomtomCacheKey(address);
+  const normalizedAddress = cacheKey.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  if (/la\\s+palma/.test(normalizedAddress) && /cordoba/.test(normalizedAddress)) {
+    return { lat: -30.2796, lng: -63.6, displayName: "La Palma, Córdoba, Argentina", provider: "TomTom-fija" };
+  }
+  if (TOMTOM_GEOCODE_CACHE.has(cacheKey)) return TOMTOM_GEOCODE_CACHE.get(cacheKey);
+  await waitForTomTomSlot();
+
   const direct = parseCoordinates(address);
   if (direct) return direct;
   const raw = String(address || "").trim();
@@ -359,7 +398,9 @@ async function geocodeTomTom(address) {
         if (!response.ok) { console.error("[Asistir24 Maps] TomTom HTTP", response.status, endpoint, query, data?.errorText || data?.error?.description || ""); }
         if (response.ok && hit) {
           console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", hit.position.lat + "," + hit.position.lon, endpoint, hit?.address?.freeformAddress || "");
-          return { lat: Number(hit.position.lat), lng: Number(hit.position.lon) };
+          const point = { lat: Number(hit.position.lat), lng: Number(hit.position.lon), displayName: hit?.address?.freeformAddress || cleaned, provider: "TomTom" };
+          TOMTOM_GEOCODE_CACHE.set(cacheKey, point);
+          return point;
         }
         if (response.ok && valid.length && requested.length) lastError = "TomTom no pudo confirmar la localidad, pero se conservaron los resultados válidos";
         else lastError = data.errorText || "";
@@ -370,6 +411,10 @@ async function geocodeTomTom(address) {
 }
 // TomTom es el único motor geográfico. No existen aliases ni rutas de cálculo Google.
 async function routeKmTomTom(origin, destination) {
+  const routeKey = `${Number(origin.lat).toFixed(5)},${Number(origin.lng).toFixed(5)}>${Number(destination.lat).toFixed(5)},${Number(destination.lng).toFixed(5)}`;
+  if (TOMTOM_ROUTE_CACHE.has(routeKey)) return TOMTOM_ROUTE_CACHE.get(routeKey);
+  await waitForTomTomSlot();
+
   const points = `${origin.lat},${origin.lng}:${destination.lat},${destination.lng}`;
   const url = new URL("https://api.tomtom.com/routing/1/calculateRoute/" + points + "/json");
   url.searchParams.set("key", tomtomKey());
@@ -380,7 +425,9 @@ async function routeKmTomTom(origin, destination) {
   const data = await response.json();
   const meters = Number(data.routes?.[0]?.summary?.lengthInMeters);
   if (!response.ok || !Number.isFinite(meters)) throw new Error(data.error?.description || data.detailedError?.message || "TomTom no pudo calcular el recorrido");
-  return Math.round((meters / 1000) * 10) / 10;
+  const km = Math.round((meters / 1000) * 10) / 10;
+  TOMTOM_ROUTE_CACHE.set(routeKey, km);
+  return km;
 }
 async function quoteFromMail(parsed, gmailMeta) {
   if (!parsed.asistenciaId || !parsed.patente || !parsed.origen) throw new Error("Mail incompleto para cotizar");
