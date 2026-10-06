@@ -818,8 +818,16 @@ app.post("/api/ruta-completa", auth, async (req,res) => {
     if(cached)return res.json(cached);
     const baseCoord=Number.isFinite(Number(base.lat))&&Number.isFinite(Number(base.lng))?{lat:Number(base.lat),lng:Number(base.lng)}:null;
     const baseTexto=[base.direccion||base.base,base.zona,"Argentina"].filter(Boolean).join(", ");
+    if (!baseCoord) {
+      return res.status(409).json({
+        error: "La base seleccionada no tiene coordenadas cargadas. Ejecutá completar-bases-tomtom.js una sola vez para cargar las coordenadas de las bases.",
+        codigo: "BASE_SIN_COORDENADAS",
+        baseId: base.id,
+        base: base.base
+      });
+    }
     const [resolvedBase,origenCoord,destinoCoord]=await Promise.all([
-      baseCoord?Promise.resolve(baseCoord):geocodeCached(baseTexto),
+      Promise.resolve(baseCoord),
       geocodeCached(origenTexto+", Argentina"),
       auxilio?Promise.resolve(null):geocodeCached(destinoTexto+", Argentina")
     ]);
