@@ -69,7 +69,7 @@ function armarBusqueda(base) {
   if (especiales[normalizado]) return especiales[normalizado];
 
   let provincia = "";
-  const zona = normalizado;
+  const zona = String(base.zona || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (zona.includes("norte") || zona.includes("sur") || zona.includes("oeste") || zona.includes("caba") || zona.includes("la costa") || zona.includes("buenos aires")) provincia = "Buenos Aires";
   else if (zona.includes("entre rios")) provincia = "Entre Ríos";
   else if (zona.includes("santa fe")) provincia = "Santa Fe";
