@@ -62,7 +62,8 @@ function armarBusqueda(base) {
     "parque siguiman": "Villa Parque Síquiman, Córdoba, Argentina",
     "constitucion": "Villa Constitución, Santa Fe, Argentina",
     "castelli": "Castelli, Buenos Aires, Argentina",
-    "rio gallegos": "Río Gallegos, Santa Cruz, Argentina"
+    "rio gallegos": "Río Gallegos, Santa Cruz, Argentina",
+    "caseros": "Caseros, Tres de Febrero, Buenos Aires, Argentina"
   };
   const nombre = String(base.base || "").trim();
   const normalizado = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -183,7 +184,7 @@ async function main() {
 
     if (
       coordenadasValidas(base.lat, base.lng ?? base.lon) &&
-      base.tomtomVersion === 2
+      base.tomtomVersion === 2 && base.id !== "aux-asist-caseros"
     ) {
       base.validada = true;
       base.fuenteCoordenadas =
