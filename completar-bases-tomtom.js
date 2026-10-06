@@ -43,17 +43,43 @@ function coordenadasValidas(lat, lon) {
   );
 }
 function armarBusqueda(base) {
-  const partes = [
-    base.direccion,
-    base.base,
-    base.localidad,
-    base.zona,
-    "Argentina"
-  ];
+  const especiales = {
+    "casanova": "Isidro Casanova, Buenos Aires, Argentina",
+    "liniers": "Liniers, Ciudad Autónoma de Buenos Aires, Argentina",
+    "devoto": "Villa Devoto, Ciudad Autónoma de Buenos Aires, Argentina",
+    "varela": "Florencio Varela, Buenos Aires, Argentina",
+    "garin": "Garín, Buenos Aires, Argentina",
+    "zarate / gral. belgrano": "Zárate, Buenos Aires, Argentina",
+    "mar de ajo": "Mar de Ajó, Buenos Aires, Argentina",
+    "jose c. paz": "José C. Paz, Buenos Aires, Argentina",
+    "jose leon suarez": "José León Suárez, Buenos Aires, Argentina",
+    "salta capital": "Salta, Salta, Argentina",
+    "tucuman": "San Miguel de Tucumán, Tucumán, Argentina",
+    "mendoza": "Mendoza, Mendoza, Argentina",
+    "la pampa": "Santa Rosa, La Pampa, Argentina",
+    "caba": "Ciudad Autónoma de Buenos Aires, Argentina",
+    "rotonda de burzaco": "Burzaco, Buenos Aires, Argentina",
+    "parque siguiman": "Villa Parque Síquiman, Córdoba, Argentina",
+    "constitucion": "Villa Constitución, Santa Fe, Argentina",
+    "castelli": "Castelli, Buenos Aires, Argentina",
+    "rio gallegos": "Río Gallegos, Santa Cruz, Argentina"
+  };
+  const nombre = String(base.base || "").trim();
+  const normalizado = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (especiales[normalizado]) return especiales[normalizado];
 
-  return partes
-    .filter(x => x && x !== "-")
-    .join(", ");
+  let provincia = "";
+  const zona = normalizado;
+  if (zona.includes("norte") || zona.includes("sur") || zona.includes("oeste") || zona.includes("caba") || zona.includes("la costa") || zona.includes("buenos aires")) provincia = "Buenos Aires";
+  else if (zona.includes("entre rios")) provincia = "Entre Ríos";
+  else if (zona.includes("santa fe")) provincia = "Santa Fe";
+  else if (zona.includes("cordoba")) provincia = "Córdoba";
+  else if (zona.includes("misiones")) provincia = "Misiones";
+  else if (zona.includes("chaco")) provincia = "Chaco";
+  else if (zona.includes("santa cruz")) provincia = "Santa Cruz";
+  else if (zona.includes("mendoza")) provincia = "Mendoza";
+
+  return [nombre, provincia, "Argentina"].filter(Boolean).join(", ");
 }
 
 async function buscarTomTom(texto) {
@@ -77,39 +103,32 @@ async function buscarTomTom(texto) {
 
 function puntajeResultado(resultado, base) {
   let puntos = 0;
+  const address = resultado.address || {};
+  const normal = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const localidad = normal(base.base || base.localidad || "");
+  const blob = normal([
+    address.municipality,
+    address.municipalitySubdivision,
+    address.countrySecondarySubdivision,
+    address.countryTertiarySubdivision,
+    address.freeformAddress,
+    address.localName,
+    address.postalName
+  ].join(" | "));
 
-  const texto = JSON.stringify(
-    resultado.address || {}
-  ).toLowerCase();
-
-  const localidad = String(
-    base.base || base.localidad || ""
-  ).toLowerCase();
-
-  if (
-    localidad &&
-    texto.includes(localidad)
-  ) {
-    puntos += 5;
+  if (localidad) {
+    if (normal(address.municipality) === localidad) puntos += 20;
+    if (normal(address.municipalitySubdivision) === localidad) puntos += 15;
+    if (normal(address.localName) === localidad) puntos += 15;
+    if (blob.includes(localidad)) puntos += 5;
   }
 
-  if (
-    texto.includes("argentina")
-  ) {
-    puntos += 2;
-  }
-
-  if (
-    resultado.type === "Point Address"
-  ) {
-    puntos += 3;
-  }
-
-  if (
-    resultado.type === "Address Range"
-  ) {
-    puntos += 2;
-  }
+  const provinciaEsperada = normal(armarBusqueda(base).split(",").slice(-2, -1)[0]);
+  const provinciaResultado = normal(address.countrySubdivisionName || address.countrySubdivision || "");
+  if (provinciaEsperada && provinciaResultado && provinciaResultado.includes(provinciaEsperada)) puntos += 15;
+  if (resultado.type === "Geography") puntos += 10;
+  if (resultado.type === "Point Address") puntos += 2;
+  if (resultado.type === "Address Range") puntos += 1;
 
   return puntos;
 }
@@ -163,10 +182,8 @@ async function main() {
     );
 
     if (
-      coordenadasValidas(
-        base.lat,
-        base.lng ?? base.lon
-      )
+      coordenadasValidas(base.lat, base.lng ?? base.lon) &&
+      base.tomtomVersion === 2
     ) {
       base.validada = true;
       base.fuenteCoordenadas =
@@ -287,6 +304,8 @@ async function main() {
 
       base.tomtomTipo =
         mejor.resultado.type || null;
+
+      base.tomtomVersion = 2;
 
       base.tomtomDireccion =
         mejor.resultado.address
