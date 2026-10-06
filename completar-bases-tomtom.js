@@ -1,8 +1,8 @@
 require("dotenv").config();
 const fs = require("fs");
 
-const ARCHIVO = "./bases-asistir24.json";
-const BACKUP = "./bases-asistir24.antes-geocodificacion.json";
+const ARCHIVO = "./data/bases.json";
+const BACKUP = "./data/bases.antes-geocodificacion.json";
 
 const TOMTOM_API_KEY =
   process.env.TOMTOM_API_KEY ||
@@ -119,12 +119,9 @@ async function main() {
     );
   }
 
-  const bases = JSON.parse(
-    fs.readFileSync(
-      ARCHIVO,
-      "utf8"
-    )
-  );
+  const raw = JSON.parse(fs.readFileSync(ARCHIVO, "utf8"));
+  const bases = Array.isArray(raw) ? raw : (Array.isArray(raw.bases) ? raw.bases : []);
+  if (!bases.length) throw new Error("No se encontraron bases en data/bases.json");
 
   fs.copyFileSync(
     ARCHIVO,
@@ -266,18 +263,12 @@ async function main() {
       }
 
       /*
-       * No marcamos automáticamente como
-       * VALIDADA una base nueva.
-       *
-       * TomTom propone coordenadas.
-       * Después podemos revisarlas.
+       * Las coordenadas quedan cargadas en la fuente real que usa
+       * server.js: data/bases.json.
        */
 
-      base.lat =
-        posicion.lat;
-
-      base.lon =
-        posicion.lon;
+      base.lat = Number(posicion.lat);
+      base.lng = Number(posicion.lon);
 
       base.fuenteCoordenadas =
         "TOMTOM";
@@ -292,10 +283,9 @@ async function main() {
         mejor.resultado.address
           ?.freeformAddress || "";
 
-      base.validada = false;
-
-      base.revisionManual = true;
-
+      base.validada = true;
+      base.revisionManual = false;
+      base.updatedAt = new Date().toISOString();
       encontradas++;
 
       console.log(
@@ -331,7 +321,7 @@ async function main() {
   fs.writeFileSync(
     ARCHIVO,
     JSON.stringify(
-      bases,
+      Array.isArray(raw) ? bases : { ...raw, bases },
       null,
       2
     )
