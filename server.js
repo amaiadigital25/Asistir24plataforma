@@ -307,7 +307,7 @@ const LA_PALMA_CORDOBA_BASE = Object.freeze({
 function findBaseForAddress(address) {
   const text = String(address || "").toLowerCase();
   const active = getBases().filter(b => b.estado === "ACTIVO");
-  const isLaPalmaCordoba = /la\\s+palma/i.test(text) && /cordoba|córdoba/i.test(text);
+  const isLaPalmaCordoba = text.includes("la palma") && (text.includes("cordoba") || text.includes("córdoba"));
   if (isLaPalmaCordoba) {
     const existing = active.find(b => /la\\s+palma/i.test(String(b.base || "")) && /cordoba|córdoba/i.test(String(b.zona || "")));
     return existing ? { ...existing, modalidad: "INTERIOR", lat: -30.2796, lng: -63.6, direccion: existing.direccion || LA_PALMA_CORDOBA_BASE.direccion, tomtomFija: true } : LA_PALMA_CORDOBA_BASE;
@@ -327,7 +327,7 @@ async function waitForTomTomSlot() {
   if (wait) await new Promise(resolve => setTimeout(resolve, wait));
 }
 function tomtomCacheKey(value) {
-  return String(value || "").trim().toLowerCase().replace(/\\s+/g, " ");
+  return String(value || "").trim().toLowerCase();
 }
 
 function tomtomKey() {
