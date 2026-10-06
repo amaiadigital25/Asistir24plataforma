@@ -98,10 +98,24 @@ function saveCollection(key, items) {
   writeData(data);
 }
 function getBases() {
-  const data = readData();
-  return Array.isArray(data.bases) && data.bases.length ? data.bases : basesDoc.bases;
+  try {
+    if (fs.existsSync(RUNTIME_BASES_FILE)) {
+      const runtime = JSON.parse(fs.readFileSync(RUNTIME_BASES_FILE, "utf8"));
+      const bases = Array.isArray(runtime) ? runtime : runtime?.bases;
+      if (Array.isArray(bases) && bases.length) return bases;
+    }
+  } catch (error) {
+    console.error("[Asistir24] No se pudo leer bases persistentes:", error.message);
+  }
+  const bundled = Array.isArray(basesDoc) ? basesDoc : basesDoc?.bases;
+  return Array.isArray(bundled) ? bundled : [];
 }
 function writeBases(bases) {
+  fs.mkdirSync(path.dirname(RUNTIME_BASES_FILE), { recursive: true });
+  const payload = { bases };
+  const temp = RUNTIME_BASES_FILE + ".tmp";
+  fs.writeFileSync(temp, JSON.stringify(payload, null, 2));
+  fs.renameSync(temp, RUNTIME_BASES_FILE);
   const data = readData();
   data.bases = bases;
   writeData(data);
