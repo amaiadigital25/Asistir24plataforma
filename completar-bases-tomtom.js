@@ -1,8 +1,11 @@
 require("dotenv").config();
 const fs = require("fs");
 
-const ARCHIVO = "./data/bases.json";
-const BACKUP = "./data/bases.antes-geocodificacion.json";
+const path = require("path");
+const RUNTIME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || "/data";
+const ARCHIVO = process.env.BASES_FILE || path.join(RUNTIME_DIR, "bases.json");
+const BUNDLED_ARCHIVO = path.join(__dirname, "data", "bases.json");
+const BACKUP = path.join(RUNTIME_DIR, "bases.antes-geocodificacion.json");
 
 const TOMTOM_API_KEY =
   process.env.TOMTOM_API_KEY ||
@@ -114,9 +117,12 @@ function puntajeResultado(resultado, base) {
 
 async function main() {
   if (!fs.existsSync(ARCHIVO)) {
-    throw new Error(
-      `No existe ${ARCHIVO}`
-    );
+    fs.mkdirSync(path.dirname(ARCHIVO), { recursive: true });
+    if (!fs.existsSync(BUNDLED_ARCHIVO)) {
+      throw new Error(`No existe la fuente inicial ${BUNDLED_ARCHIVO}`);
+    }
+    fs.copyFileSync(BUNDLED_ARCHIVO, ARCHIVO);
+    console.log("📦 Se inicializó el archivo persistente de bases:", ARCHIVO);
   }
 
   const raw = JSON.parse(fs.readFileSync(ARCHIVO, "utf8"));
