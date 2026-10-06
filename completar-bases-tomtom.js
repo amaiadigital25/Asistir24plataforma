@@ -248,23 +248,36 @@ async function main() {
         continue;
       }
 
+      const provinciaEsperada = String(armarBusqueda(base).split(",").slice(-2, -1)[0] || "")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
       const candidatos =
         data.results
           .map(r => ({
             resultado: r,
-            puntos:
-              puntajeResultado(
-                r,
-                base
-              )
+            puntos: puntajeResultado(r, base)
           }))
-          .sort(
-            (a, b) =>
-              b.puntos - a.puntos
-          );
+          .filter(item => {
+            const provinciaResultado = String(
+              item.resultado.address?.countrySubdivisionName ||
+              item.resultado.address?.countrySubdivision ||
+              ""
+            ).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            return !provinciaEsperada ||
+              !provinciaResultado ||
+              provinciaResultado.includes(provinciaEsperada);
+          })
+          .sort((a, b) => b.puntos - a.puntos);
 
-      const mejor =
-        candidatos[0];
+      const mejor = candidatos[0];
+
+      if (!mejor || mejor.puntos < 10) {
+        base.validada = false;
+        base.revisionManual = true;
+        pendientes++;
+        console.log("   ⚠️ Resultado descartado por baja coincidencia geográfica");
+        continue;
+      }
 
       const posicion =
         mejor.resultado.position;
