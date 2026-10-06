@@ -160,13 +160,17 @@ async function main() {
     if (
       coordenadasValidas(
         base.lat,
-        base.lon
+        base.lng ?? base.lon
       )
     ) {
       base.validada = true;
       base.fuenteCoordenadas =
         base.fuenteCoordenadas ||
         "CARGADA";
+      if (!coordenadasValidas(base.lat, base.lng) && coordenadasValidas(base.lat, base.lon)) {
+        base.lng = Number(base.lon);
+        delete base.lon;
+      }
 
       correctas++;
 
