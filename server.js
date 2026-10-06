@@ -5,7 +5,24 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
-const basesDoc = require("./data/bases.json");
+const BUNDLED_BASES_FILE = path.join(__dirname, "data", "bases.json");
+const RUNTIME_BASES_FILE = process.env.BASES_FILE || path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || "/data", "bases.json");
+function loadBasesDoc() {
+  try {
+    if (fs.existsSync(RUNTIME_BASES_FILE)) {
+      const data = JSON.parse(fs.readFileSync(RUNTIME_BASES_FILE, "utf8"));
+      if (data && typeof data === "object") return data;
+    }
+    const bundled = JSON.parse(fs.readFileSync(BUNDLED_BASES_FILE, "utf8"));
+    fs.mkdirSync(path.dirname(RUNTIME_BASES_FILE), { recursive: true });
+    fs.writeFileSync(RUNTIME_BASES_FILE, JSON.stringify(bundled, null, 2));
+    return bundled;
+  } catch (error) {
+    console.error("[Asistir24] No se pudo cargar bases:", error.message);
+    return { bases: [] };
+  }
+}
+const basesDoc = loadBasesDoc();
 const { ensureWorkflow, cambiarEstado, buildRemito } = require("./src/workflow");
 const { parseClaimsMail } = require("./src/claims-mail-parser");
 
