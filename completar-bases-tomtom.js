@@ -183,8 +183,7 @@ async function main() {
     );
 
     if (
-      coordenadasValidas(base.lat, base.lng ?? base.lon) &&
-      base.tomtomVersion === 2 && base.id !== "aux-asist-caseros"
+      coordenadasValidas(base.lat, base.lng ?? base.lon ?? base.longitude)
     ) {
       base.validada = true;
       base.fuenteCoordenadas =
@@ -194,13 +193,18 @@ async function main() {
         base.lng = Number(base.lon);
         delete base.lon;
       }
+      if (!coordenadasValidas(base.lat, base.lng) && coordenadasValidas(base.lat, base.longitude)) {
+        base.lng = Number(base.longitude);
+        delete base.longitude;
+      }
+      base.tomtomVersion = 2;
 
       correctas++;
 
       console.log(
         "   ✅ Coordenadas existentes:",
         base.lat,
-        base.lon
+        base.lng
       );
 
       continue;
@@ -357,7 +361,7 @@ async function main() {
      * Evitamos disparar todas las
      * consultas simultáneamente.
      */
-    await sleep(250);
+    await sleep(1200);
   }
 
   fs.writeFileSync(
