@@ -84,7 +84,6 @@ function buildRemito(cotizacion) {
     "",
     "DATOS DEL VEHÍCULO",
     `Patente: ${cotizacion.patente || "-"}`,
-    `Marca: ${datos.marca || "-"}`,
     `Modelo: ${datos.modelo || datos.vehiculo || "-"}`,
     `Color: ${datos.color || "-"}`,
     `Transmisión: ${datos.transmision || "-"}`,
