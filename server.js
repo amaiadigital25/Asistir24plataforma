@@ -1009,7 +1009,10 @@ app.get("/api/cotizaciones", auth, (req, res) => {
     ensureWorkflow(item);
     if (!item.remito || typeof item.remito !== "object") item.remito = buildRemito(item);
   });
-  res.json({ total: cotizaciones.length, items: cotizaciones });
+  const requestedLimit = Number.parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 5000) : 100;
+  const items = cotizaciones.slice(0, limit);
+  res.json({ total: cotizaciones.length, returned: items.length, items });
 });
 app.get("/api/cotizaciones/:id", auth, (req, res) => {
   const q = cotizaciones.find(item => item.id === req.params.id);
