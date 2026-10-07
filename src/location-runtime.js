@@ -49,7 +49,7 @@ function patchLocationApi(source) {
     'async function routeCached(a, b) { const key = String(a.lat.toFixed(5)) + "," + String(a.lng.toFixed(5)) + ">" + String(b.lat.toFixed(5)) + "," + String(b.lng.toFixed(5)); const hit = cacheGet(ROUTING_CACHE, key); if (hit !== null) return hit; return cachePut(ROUTING_CACHE, key, await routeKmTomTom(a, b)); }',
     'app.post("/api/ruta-completa", auth, async (req, res) => {',
     '  try {',
-    '    const base = basesDoc.bases.find(item => item.id === req.body?.baseId);',
+    '    const base = getBases().find(item => item.id === req.body?.baseId);',
     '    const origenTexto = String(req.body?.origen || "").trim();',
     '    const destinoTexto = String(req.body?.destino || "").trim();',
     '    const modalidad = req.body?.modalidad === "INTERIOR" ? "INTERIOR" : (base?.modalidad === "INTERIOR" ? "INTERIOR" : "AMBA_CABA");',
