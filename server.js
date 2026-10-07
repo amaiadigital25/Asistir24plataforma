@@ -351,11 +351,32 @@ function findBaseForAddress(address) {
 }const TOMTOM_GEOCODE_CACHE = new Map();
 const TOMTOM_ROUTE_CACHE = new Map();
 let TOMTOM_NEXT_REQUEST_AT = 0;
-async function waitForTomTomSlot() {
+async function waitForTomTomSlot(minGapMs = 900) {
   const now = Date.now();
   const wait = Math.max(0, TOMTOM_NEXT_REQUEST_AT - now);
-  TOMTOM_NEXT_REQUEST_AT = Math.max(now, TOMTOM_NEXT_REQUEST_AT) + 600;
+  TOMTOM_NEXT_REQUEST_AT = Math.max(now, TOMTOM_NEXT_REQUEST_AT) + minGapMs;
   if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+}
+async function tomtomFetch(url, options = {}, label = "TomTom") {
+  let lastError = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await waitForTomTomSlot(attempt === 0 ? 900 : 1800);
+    const response = await fetch(url, options);
+    let data = {};
+    try { data = await response.json(); } catch {}
+    if (response.ok) return { response, data };
+    const retryable = response.status === 429 || response.status >= 500;
+    const retryAfter = Number(response.headers.get("retry-after"));
+    const delay = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter * 1000, 15000) : Math.min(1500 * (2 ** attempt), 12000);
+    console.warn("[Asistir24 Maps]", label, "HTTP", response.status, retryable && attempt < 3 ? "reintentando" : "final", data?.errorText || data?.error?.description || "");
+    if (!retryable || attempt === 3) {
+      const detail = data?.errorText || data?.error?.description || data?.detailedError?.message || "";
+      throw new Error(detail ? `TomTom HTTP ${response.status}: ${detail}` : `TomTom HTTP ${response.status}`);
+    }
+    await new Promise(resolve => setTimeout(resolve, delay));
+    lastError = new Error(`TomTom HTTP ${response.status}`);
+  }
+  throw lastError || new Error("TomTom no respondió");
 }
 function tomtomCacheKey(value) {
   return String(value || "").trim().toLowerCase();
@@ -375,121 +396,73 @@ function parseCoordinates(value) {
 async function geocodeTomTom(address) {
   const cacheKey = tomtomCacheKey(address);
   const normalizedAddress = cacheKey.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
-  if (/la\\s+palma/.test(normalizedAddress) && /cordoba/.test(normalizedAddress)) {
-    return { lat: -30.2796, lng: -63.6, displayName: "La Palma, Córdoba, Argentina", provider: "TomTom-fija" };
-  }
+  if (/la\\s+palma/.test(normalizedAddress) && /cordoba/.test(normalizedAddress)) return { lat: -30.2796, lng: -63.6, displayName: "La Palma, Córdoba, Argentina", provider: "TomTom-fija" };
   if (TOMTOM_GEOCODE_CACHE.has(cacheKey)) return TOMTOM_GEOCODE_CACHE.get(cacheKey);
-  await waitForTomTomSlot();
-
   const direct = parseCoordinates(address);
-  if (direct) return direct;
+  if (direct) return { ...direct, provider: "directo" };
   const raw = String(address || "").trim();
   const cleaned = raw.replace(/\\s+/g, " ").replace(/\\s+0(?=\\s*,|$)/g, "").replace(/\\s*,\\s*/g, ", ").trim();
+  if (!cleaned) throw new Error("TomTom no recibió una ubicación válida");
   const parts = cleaned.split(",").map(v => v.trim()).filter(Boolean);
-  const contextParts = parts.slice(1).filter(v => {
-    const n = v.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().trim();
-    return n && !["argentina","buenos aires","provincia de buenos aires"].includes(n);
-  });
-  const contextText = contextParts.join(", ");
-  const intersection = (parts[0] || "").match(/^((?:AV(?:ENIDA)?\\.?|CALLE|C\\.?)?\\s*[^,&]+?)\\s+(?:Y|&)\\s+((?:AV(?:ENIDA)?\\.?|CALLE|C\\.?)?\\s*[^,&]+?)$/i);
+  const streetPart = parts[0] || "";
+  const intersection = streetPart.match(/^((?:AV(?:ENIDA)?\\.?|CALLE|C\\.?)?\\s*[^,&]+?)\\s+(?:Y|&)\\s+((?:AV(?:ENIDA)?\\.?|CALLE|C\\.?)?\\s*[^,&]+?)$/i);
   const variants = [];
+  const cleanContext = [...new Set(parts.slice(1).map(v => v.trim()).filter(Boolean))].join(", ");
   if (intersection) {
-    const s1=intersection[1].trim(), s2=intersection[2].trim();
-    const expand=s=>s.replace(/^AV(?:ENIDA)?\\.?\\s*/i,"Avenida ").replace(/^C(?:ALLE)?\\.?\\s*/i,"Calle ");
-    variants.push(s1+" & "+s2+(contextText ? ", "+contextText : ""));
-    variants.push(expand(s1)+" & "+expand(s2)+(contextText ? ", "+contextText : ""));
-    variants.push(expand(s1)+" y "+expand(s2)+(contextText ? ", "+contextText : ""));
+    const s1 = intersection[1].trim(), s2 = intersection[2].trim();
+    const expand = s => s.replace(/^AV(?:ENIDA)?\\.?\\s*/i, "Avenida ").replace(/^C(?:ALLE)?\\.?\\s*/i, "Calle ");
+    variants.push(s1 + " & " + s2 + (cleanContext ? ", " + cleanContext : ""));
+    variants.push(expand(s1) + " & " + expand(s2) + (cleanContext ? ", " + cleanContext : ""));
+    variants.push(expand(s1) + " y " + expand(s2) + (cleanContext ? ", " + cleanContext : ""));
   }
   variants.push(cleaned);
-  let lastError = "";
-
-  const normalizePlace = v => String(v || "")
-    .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
-    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  const aliases = {
-    "caba": ["caba", "ciudad autonoma de buenos aires", "capital federal"],
-    "ciudad autonoma de buenos aires": ["caba", "ciudad autonoma de buenos aires", "capital federal"],
-    "capital federal": ["caba", "ciudad autonoma de buenos aires", "capital federal"]
-  };
-  const expandedRequested = [...new Set(contextParts.flatMap(v => {
-    const n=normalizePlace(v);
-    return aliases[n] || [n];
-  }).filter(Boolean))];
-
+  if (parts.length > 2) variants.push([parts[0], ...parts.slice(1)].join(", "));
+  variants.push(cleaned + ", Argentina");
+  const normalizePlace = v => String(v || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const requested = parts.slice(1).map(normalizePlace).filter(x => x && !/^(argentina|buenos aires|provincia de buenos aires)$/.test(x));
+  let best = null, lastError = "";
   for (const query of [...new Set(variants)]) {
     try {
       const url = new URL("https://api.tomtom.com/search/2/geocode/" + encodeURIComponent(query) + ".json");
-      url.searchParams.set("key", tomtomKey());
-      url.searchParams.set("countrySet", "AR");
-      url.searchParams.set("limit", "5");
-      url.searchParams.set("language", "es-AR");
-      const response = await fetch(url);
-      const data = await response.json();
+      url.searchParams.set("key", tomtomKey()); url.searchParams.set("countrySet", "AR"); url.searchParams.set("limit", "5"); url.searchParams.set("language", "es-ES");
+      const { data } = await tomtomFetch(url, {}, "geocode " + query);
       const results = Array.isArray(data.results) ? data.results : [];
-      const valid = results.filter(r => Number.isFinite(Number(r?.position?.lat)) && Number.isFinite(Number(r?.position?.lon)));
-      if (!response.ok) {
-        lastError = data.errorText || data.error?.description || ("TomTom HTTP " + response.status);
-        console.error("[Asistir24 Maps] TomTom HTTP", response.status, query, lastError);
-        continue;
-      }
-      if (!valid.length) {
-        lastError = "TomTom no devolvió coordenadas válidas";
-        continue;
-      }
-
-      const scored = valid.map((r, index) => {
-        const hay = normalizePlace([
-          r?.address?.municipalitySubdivision,
-          r?.address?.municipality,
-          r?.address?.countrySecondarySubdivision,
-          r?.address?.countryTertiarySubdivision,
-          r?.address?.countrySubdivision,
-          r?.address?.freeformAddress,
-          r?.address?.localName,
-          r?.address?.postalName,
-          r?.address?.neighborhoodName
-        ].filter(Boolean).join(" "));
-        let score = (5 - index);
-        for (const requested of expandedRequested) {
-          if (hay.includes(requested) || requested.includes(hay)) score += requested.length >= 5 ? 20 : 8;
+      for (const result of results) {
+        const lat = Number(result?.position?.lat), lng = Number(result?.position?.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        const hay = normalizePlace([result?.address?.municipalitySubdivision,result?.address?.municipality,result?.address?.countrySecondarySubdivision,result?.address?.countrySubdivision,result?.address?.freeformAddress,result?.address?.localName,result?.address?.postalName].filter(Boolean).join(" "));
+        let score = Number(result?.score || 0);
+        for (const place of requested) {
+          if (hay.includes(place)) score += 30;
+          else if (place.includes(hay) && hay.length >= 4) score += 10;
         }
-        return { result: r, score };
-      }).sort((a,b) => b.score - a.score);
-
-      const selected = scored[0]?.result;
-      if (selected) {
-        const point = {
-          lat: Number(selected.position.lat),
-          lng: Number(selected.position.lon),
-          displayName: selected?.address?.freeformAddress || query,
-          provider: "TomTom"
-        };
-        TOMTOM_GEOCODE_CACHE.set(cacheKey, point);
-        console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", point.lat + "," + point.lng, selected?.address?.freeformAddress || "");
-        return point;
+        if (result?.type === "Point Address") score += 8;
+        if (result?.type === "Address Range") score += 5;
+        if (result?.type === "Geography") score += 3;
+        if (!best || score > best.score) best = { result, lat, lng, score };
       }
-    } catch (error) {
-      lastError = error.message;
-    }
+      if (best && best.score >= 40) break;
+    } catch (error) { lastError = error.message; }
   }
-  throw new Error(lastError || "TomTom no pudo localizar: " + cleaned);
+  if (!best) throw new Error(lastError || "TomTom no pudo localizar: " + cleaned);
+  const point = { lat: best.lat, lng: best.lng, displayName: best.result?.address?.freeformAddress || cleaned, provider: "TomTom" };
+  TOMTOM_GEOCODE_CACHE.set(cacheKey, point);
+  console.log("[Asistir24 Maps] TomTom geocode:", cleaned, "->", point.lat + "," + point.lng, point.displayName);
+  return point;
 }
 // TomTom es el único motor geográfico. No existen aliases ni rutas de cálculo Google.
 async function routeKmTomTom(origin, destination) {
-  const routeKey = `${Number(origin.lat).toFixed(5)},${Number(origin.lng).toFixed(5)}>${Number(destination.lat).toFixed(5)},${Number(destination.lng).toFixed(5)}`;
+  const lat1 = Number(origin?.lat), lng1 = Number(origin?.lng), lat2 = Number(destination?.lat), lng2 = Number(destination?.lng);
+  if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) throw new Error("TomTom recibió coordenadas inválidas para calcular la ruta");
+  if (Math.abs(lat1) > 90 || Math.abs(lat2) > 90 || Math.abs(lng1) > 180 || Math.abs(lng2) > 180) throw new Error("TomTom recibió coordenadas fuera de rango");
+  const routeKey = `${lat1.toFixed(5)},${lng1.toFixed(5)}>${lat2.toFixed(5)},${lng2.toFixed(5)}`;
   if (TOMTOM_ROUTE_CACHE.has(routeKey)) return TOMTOM_ROUTE_CACHE.get(routeKey);
-  await waitForTomTomSlot();
-
-  const points = `${origin.lat},${origin.lng}:${destination.lat},${destination.lng}`;
+  const points = `${lat1},${lng1}:${lat2},${lng2}`;
   const url = new URL("https://api.tomtom.com/routing/1/calculateRoute/" + points + "/json");
-  url.searchParams.set("key", tomtomKey());
-  url.searchParams.set("travelMode", "car");
-  url.searchParams.set("routeType", "fastest");
-  url.searchParams.set("traffic", "false");
-  const response = await fetch(url);
-  const data = await response.json();
+  url.searchParams.set("key", tomtomKey()); url.searchParams.set("travelMode", "car"); url.searchParams.set("routeType", "fastest"); url.searchParams.set("traffic", "false");
+  const { data } = await tomtomFetch(url, {}, "routing");
   const meters = Number(data.routes?.[0]?.summary?.lengthInMeters);
-  if (!response.ok || !Number.isFinite(meters)) throw new Error(data.error?.description || data.detailedError?.message || "TomTom no pudo calcular el recorrido");
+  if (!Number.isFinite(meters)) throw new Error(data.error?.description || data.detailedError?.message || "TomTom no devolvió una distancia válida");
   const km = Math.round((meters / 1000) * 10) / 10;
   TOMTOM_ROUTE_CACHE.set(routeKey, km);
   return km;
@@ -869,44 +842,47 @@ async function geocodeCached(text){const key=String(text||"").trim().toLowerCase
 async function routeCached(a,b){const key=String(a.lat.toFixed(5))+","+String(a.lng.toFixed(5))+">"+String(b.lat.toFixed(5))+","+String(b.lng.toFixed(5));const hit=cacheGet(ROUTING_CACHE,key);if(hit!==null)return hit;return cachePut(ROUTING_CACHE,key,await routeKmTomTom(a,b));}
 app.post("/api/ruta-completa", auth, async (req,res) => {
   try {
-    const base=getBases().find(item=>item.id===req.body?.baseId);
-    const origenTexto=String(req.body?.origen||"").trim();
-    const destinoTexto=String(req.body?.destino||"").trim();
-    const modalidad=req.body?.modalidad==="INTERIOR"?"INTERIOR":(base?.modalidad==="INTERIOR"?"INTERIOR":"AMBA_CABA");
-    const tipoServicio=String(req.body?.tipoServicio||"").trim();
-    const auxilio=tipoServicio.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")==="auxilio mecanico";
-    if(!base)return res.status(400).json({error:"Base inválida"});
-    if(!origenTexto)return res.status(400).json({error:"Ingrese la ubicación de origen"});
-    if(!auxilio&&!destinoTexto)return res.status(400).json({error:"Ingrese el destino"});
-    const cacheKey=["complete",base.id,modalidad,auxilio?"A":"R",origenTexto.toLowerCase(),destinoTexto.toLowerCase()].join("|");
-    const cached=cacheGet(ROUTING_CACHE,cacheKey);
-    if(cached)return res.json(cached);
-    const baseCoord=Number.isFinite(Number(base.lat))&&Number.isFinite(Number(base.lng))?{lat:Number(base.lat),lng:Number(base.lng)}:null;
-    const baseTexto=[base.direccion||base.base,base.zona,"Argentina"].filter(Boolean).join(", ");
+    const base = getBases().find(item => item.id === req.body?.baseId);
+    const origenTexto = String(req.body?.origen || "").trim();
+    const destinoTexto = String(req.body?.destino || "").trim();
+    const modalidad = req.body?.modalidad === "INTERIOR" ? "INTERIOR" : (base?.modalidad === "INTERIOR" ? "INTERIOR" : "AMBA_CABA");
+    const tipoServicio = String(req.body?.tipoServicio || "").trim();
+    const auxilio = tipoServicio.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "auxilio mecanico";
+    if (!base) return res.status(400).json({ error: "Base inválida" });
+    if (!origenTexto) return res.status(400).json({ error: "Ingrese la ubicación de origen" });
+    if (!auxilio && !destinoTexto) return res.status(400).json({ error: "Ingrese el destino" });
+    const cacheKey = ["complete", base.id, modalidad, auxilio ? "A" : "R", origenTexto.toLowerCase(), destinoTexto.toLowerCase()].join("|");
+    const cached = cacheGet(ROUTING_CACHE, cacheKey);
+    if (cached) return res.json(cached);
+    const baseLat = Number(base.lat ?? base.latitude), baseLng = Number(base.lng ?? base.lon ?? base.longitude);
+    let baseCoord = Number.isFinite(baseLat) && Number.isFinite(baseLng) ? { lat: baseLat, lng: baseLng } : null;
+    const baseTexto = [base.direccion || base.base, base.zona, "Argentina"].filter(Boolean).join(", ");
     if (!baseCoord) {
-      return res.status(409).json({
-        error: "La base seleccionada no tiene coordenadas cargadas. Ejecutá completar-bases-tomtom.js una sola vez para cargar las coordenadas de las bases.",
-        codigo: "BASE_SIN_COORDENADAS",
-        baseId: base.id,
-        base: base.base
-      });
+      try {
+        const resolved = await geocodeTomTom(baseTexto);
+        baseCoord = { lat: Number(resolved.lat), lng: Number(resolved.lng) };
+        const bases = getBases().slice(), index = bases.findIndex(item => item.id === base.id);
+        if (index >= 0) {
+          bases[index].lat = baseCoord.lat; bases[index].lng = baseCoord.lng;
+          delete bases[index].lon; delete bases[index].longitude;
+          bases[index].fuenteCoordenadas = "TOMTOM"; bases[index].tomtomVersion = 2; bases[index].updatedAt = new Date().toISOString();
+          writeBases(bases);
+        }
+      } catch (error) {
+        return res.status(409).json({ error: "No se pudo geolocalizar la base seleccionada con TomTom.", codigo: "BASE_SIN_COORDENADAS", baseId: base.id, base: base.base, detalle: error.message });
+      }
     }
-    const [resolvedBase,origenCoord,destinoCoord]=await Promise.all([
-      Promise.resolve(baseCoord),
-      geocodeCached(origenTexto+", Argentina"),
-      auxilio?Promise.resolve(null):geocodeCached(destinoTexto+", Argentina")
-    ]);
-    const routes=[routeCached(resolvedBase,origenCoord)];
-    if(!auxilio)routes.push(routeCached(origenCoord,destinoCoord));
-    if(!auxilio&&modalidad==="INTERIOR")routes.push(routeCached(destinoCoord,resolvedBase));
-    const values=await Promise.all(routes);
-    const tramos={baseOrigen:Number(values[0]||0),origenDestino:auxilio?0:Number(values[1]||0),destinoBase:(!auxilio&&modalidad==="INTERIOR")?Number(values[2]||0):0};
-    const result={success:true,modalidad,auxilio,baseDireccion:baseTexto,tramos,kmTotal:Math.round((tramos.baseOrigen+tramos.origenDestino+tramos.destinoBase)*10)/10,coordenadas:{base:resolvedBase,origen:origenCoord,destino:destinoCoord}};
-    cachePut(ROUTING_CACHE,cacheKey,result);
-    res.json(result);
-  } catch(error) {
-    console.error("[Asistir24 Ruta]",error.message);
-    res.status(503).json({error:error.message||"No se pudo calcular el recorrido"});
+    const [origenCoord, destinoCoord] = await Promise.all([geocodeCached(origenTexto + ", Argentina"), auxilio ? Promise.resolve(null) : geocodeCached(destinoTexto + ", Argentina")]);
+    const routes = [routeCached(baseCoord, origenCoord)];
+    if (!auxilio) routes.push(routeCached(origenCoord, destinoCoord));
+    if (!auxilio && modalidad === "INTERIOR") routes.push(routeCached(destinoCoord, baseCoord));
+    const values = await Promise.all(routes);
+    const tramos = { baseOrigen: Number(values[0] || 0), origenDestino: auxilio ? 0 : Number(values[1] || 0), destinoBase: (!auxilio && modalidad === "INTERIOR") ? Number(values[2] || 0) : 0 };
+    const result = { success: true, modalidad, auxilio, baseDireccion: baseTexto, tramos, kmTotal: Math.round((tramos.baseOrigen + tramos.origenDestino + tramos.destinoBase) * 10) / 10, coordenadas: { base: baseCoord, origen: origenCoord, destino: destinoCoord } };
+    cachePut(ROUTING_CACHE, cacheKey, result); res.json(result);
+  } catch (error) {
+    console.error("[Asistir24 Ruta]", error.message);
+    res.status(503).json({ error: error.message || "No se pudo calcular el recorrido" });
   }
 });
 app.post("/api/bases", auth, adminOnly, (req, res) => {
