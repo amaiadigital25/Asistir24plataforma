@@ -966,7 +966,6 @@ app.post("/api/cotizar", auth, (req, res) => {
   if (!servicioTexto) return res.status(400).json({ error: "Ingrese el numero de servicio" });
   if (!patenteTexto) return res.status(400).json({ error: "Ingrese la patente" });
   if (!datosAsociado.asegurado) return res.status(400).json({ error: "Ingrese el nombre del asociado" });
-  if (!datosAsociado.marca) return res.status(400).json({ error: "Ingrese la marca del vehículo" });
   if (!datosAsociado.modelo) return res.status(400).json({ error: "Ingrese el modelo del vehículo" });
   if (!datosAsociado.color) return res.status(400).json({ error: "Ingrese el color del vehículo" });
   const aux = String(tipoServicio || "").toLowerCase().replace(/á/g, "a") === "auxilio mecanico";
