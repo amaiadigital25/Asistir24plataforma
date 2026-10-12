@@ -119,9 +119,9 @@
   const start = () => {
     const tbody = document.getElementById("quoteRows");
     if (!tbody) return setTimeout(start, 300);
-    observer.observe(tbody, { childList: true, subtree: true });
+    // Observar solo filas agregadas/eliminadas: evita reaccionar a cambios internos de botones.
+    observer.observe(tbody, { childList: true, subtree: false });
     enhanceRows();
-    setInterval(enhanceRows, 15000);
   };
 
   start();
