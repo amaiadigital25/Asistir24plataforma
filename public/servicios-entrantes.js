@@ -210,6 +210,6 @@
     }
     cargarEntrantes();
     $("refreshIncoming")?.addEventListener("click", cargarEntrantes);
-    setInterval(cargarEntrantes, 15000);
+    // La actualización queda bajo demanda para evitar consultas repetidas al servidor.
   });
 })();
