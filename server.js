@@ -44,7 +44,7 @@ const FACTURACION_ESTADOS = ["PENDIENTE", "LISTO_PARA_FACTURAR", "FACTURADO", "C
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const GMAIL_EXPECTED_ACCOUNT = process.env.GMAIL_ACCOUNT || "asistir24operadores@gmail.com";
 const GMAIL_AUTO_ENABLED = String(process.env.GMAIL_AUTO_ENABLED || "").toLowerCase() === "true";
-const GMAIL_POLL_MS = Math.max(60000, Number(process.env.GMAIL_POLL_MS || 300000));
+const GMAIL_POLL_MS = Math.max(15000, Number(process.env.GMAIL_POLL_MS || 15000));
 
 // Función auxiliar: obtener la hora en Buenos Aires y retornar tarifa dinámica para compañías
 function getTarifaCompariiaPorHora() {
