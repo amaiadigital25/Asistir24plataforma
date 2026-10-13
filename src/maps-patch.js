@@ -46,6 +46,15 @@ function withArgentina(value) {
 async function tomtomGeocode(address) {
   const direct = parseCoordinates(cleanAddress(address).replace(/,?\\s*argentina\\s*$/i, ""));
   if (direct) return direct;
+  // Corrección puntual para la referencia genérica RP11 confirmada por el operador.
+  // Se aplica aquí porque este módulo intercepta las consultas de mapas en producción.
+  const normalizedAddress = cleanAddress(address).toLowerCase().replaceAll(" ", "");
+  if (normalizedAddress.includes("rp11") && normalizedAddress.includes("provinciadebuenosaires") && !normalizedAddress.includes("km")) {
+    const point = { lat: -36.441328656727094, lng: -57.361992906705154, displayName: "RP11, punto confirmado por coordenadas, Provincia de Buenos Aires", provider: "coordenadas-confirmadas" };
+    cacheSet(geocodeCache, normalizedAddress, point);
+    console.log(`[Asistir24 Maps] RP11 corregida por coordenadas confirmadas: ${point.lat},${point.lng}`);
+    return point;
+  }
   const query = withArgentina(address);
   const cacheKey = query.toLowerCase();
   if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey);
