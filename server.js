@@ -397,6 +397,13 @@ async function geocodeTomTom(address) {
   const cacheKey = tomtomCacheKey(address);
   const normalizedAddress = cacheKey.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
   if (/la\\s+palma/.test(normalizedAddress) && /cordoba/.test(normalizedAddress)) return { lat: -30.2796, lng: -63.6, displayName: "La Palma, Córdoba, Argentina", provider: "TomTom-fija" };
+  // Corrección puntual: TomTom confundía la referencia genérica RP11 con una calle 11 en Malvinas Argentinas.
+  if (/\\brp\\s*11\\b/.test(normalizedAddress) && /provincia de buenos aires/.test(normalizedAddress) && !/\\bkm\\s*\\d+/.test(normalizedAddress)) {
+    const point = { lat: -36.441328656727094, lng: -57.361992906705154, displayName: "RP11, punto confirmado por coordenadas, Provincia de Buenos Aires", provider: "coordenadas-confirmadas" };
+    TOMTOM_GEOCODE_CACHE.set(cacheKey, point);
+    console.log("[Asistir24 Maps] RP11 corregida por coordenadas confirmadas:", point.lat + "," + point.lng);
+    return point;
+  }
   if (TOMTOM_GEOCODE_CACHE.has(cacheKey)) return TOMTOM_GEOCODE_CACHE.get(cacheKey);
   const direct = parseCoordinates(address);
   if (direct) return { ...direct, provider: "directo" };
