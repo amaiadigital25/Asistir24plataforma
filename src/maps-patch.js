@@ -37,14 +37,46 @@ function parseCoordinates(value) {
   return validArgentinaPoint(lat, lng) ? { lat, lng, displayName: text, provider: "Coordenadas" } : null;
 }
 function cleanAddress(value) {
-  return String(value || "").replace(/\\s+/g, " ").replace(/\\s*,\\s*/g, ", ").trim();
+  return String(value || "").replace(/\s+/g, " ").replace(/\s*,\s*/g, ", ").trim();
+}
+function normalizePlace(value) {
+  return String(value || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\b(provincia|province|prov)\s+(de\s+)?/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+function resultAdminText(result) {
+  const a = result?.address || {};
+  return normalizePlace([
+    a.countrySubdivision, a.countrySecondarySubdivision, a.municipality,
+    a.municipalitySubdivision, a.localName, a.freeformAddress
+  ].filter(Boolean).join(" "));
+}
+function resultMatchesRequestedArea(address, result) {
+  const parts = cleanAddress(address).split(",").map(p => p.trim()).filter(Boolean);
+  const expected = parts.slice(1).filter(p => !/^argentina$/i.test(p));
+  if (!expected.length) return true;
+  const admin = resultAdminText(result);
+  const lastExpected = normalizePlace(expected[expected.length - 1]);
+  const subdivision = normalizePlace(result?.address?.countrySubdivision || "");
+  // Never accept a result from a different province when the query names one.
+  if (lastExpected && subdivision && lastExpected !== subdivision &&
+      !subdivision.includes(lastExpected) && !lastExpected.includes(subdivision)) return false;
+  // Prefer an administrative match; if the provider returned no usable admin fields,
+  // fail closed instead of quoting with an unrelated Argentine result.
+  return expected.some(part => {
+    const token = normalizePlace(part);
+    return token.length >= 3 && (admin.includes(token) || token.includes(subdivision));
+  });
 }
 function withArgentina(value) {
   const text = cleanAddress(value);
   return /argentina/i.test(text) ? text : `${text}, Argentina`;
 }
 async function tomtomGeocode(address) {
-  const direct = parseCoordinates(cleanAddress(address).replace(/,?\\s*argentina\\s*$/i, ""));
+  const direct = parseCoordinates(cleanAddress(address).replace(/,?\s*argentina\s*$/i, ""));
   if (direct) return direct;
   // Corrección puntual para la referencia genérica RP11 confirmada por el operador.
   // Se aplica aquí porque este módulo intercepta las consultas de mapas en producción.
@@ -67,8 +99,12 @@ async function tomtomGeocode(address) {
   if (!response.ok) throw new Error(`TomTom geocode HTTP ${response.status}`);
   const data = await response.json();
   const results = Array.isArray(data?.results) ? data.results : [];
-  const best = results.find(r => validArgentinaPoint(Number(r?.position?.lat), Number(r?.position?.lon)));
-  if (!best) throw new Error(`TomTom sin resultado para: ${cleanAddress(address)}`);
+  const candidates = results.filter(r => validArgentinaPoint(Number(r?.position?.lat), Number(r?.position?.lon)));
+  const best = candidates.find(r => resultMatchesRequestedArea(address, r));
+  if (!best) {
+    const areas = candidates.map(r => r?.address?.freeformAddress || r?.address?.countrySubdivision || "ubicación sin datos administrativos").slice(0, 3);
+    throw new Error(`TomTom sin resultado compatible con la localidad/provincia solicitada: ${cleanAddress(address)}${areas.length ? `. Resultados descartados: ${areas.join(" | ")}` : ""}`);
+  }
   const point = { lat: Number(best.position.lat), lng: Number(best.position.lon), displayName: best?.address?.freeformAddress || query, provider: "TomTom" };
   cacheSet(geocodeCache, cacheKey, point);
   console.log(`[Asistir24 Maps] TomTom geocode: ${cleanAddress(address)} -> ${point.lat},${point.lng}`);
