@@ -68,7 +68,7 @@ function resultMatchesRequestedArea(address, result) {
   // fail closed instead of quoting with an unrelated Argentine result.
   return expected.some(part => {
     const token = normalizePlace(part);
-    return token.length >= 3 && (admin.includes(token) || token.includes(subdivision));
+    return token.length >= 3 && (admin.includes(token) || (subdivision && token.includes(subdivision)));
   });
 }
 function withArgentina(value) {
