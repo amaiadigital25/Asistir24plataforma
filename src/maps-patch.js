@@ -37,14 +37,66 @@ function parseCoordinates(value) {
   return validArgentinaPoint(lat, lng) ? { lat, lng, displayName: text, provider: "Coordenadas" } : null;
 }
 function cleanAddress(value) {
-  return String(value || "").replace(/\\s+/g, " ").replace(/\\s*,\\s*/g, ", ").trim();
+  return String(value || "").replace(/\s+/g, " ").replace(/\s*,\s*/g, ", ").trim();
+}
+function normalizePlace(value) {
+  return String(value || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\b(provincia|province|prov)\s+(de\s+)?/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+function resultAdminText(result) {
+  const a = result?.address || {};
+  return normalizePlace([
+    a.countrySubdivision, a.countrySecondarySubdivision, a.municipality,
+    a.municipalitySubdivision, a.localName, a.freeformAddress
+  ].filter(Boolean).join(" "));
+}
+function placeAliases(value) {
+  const token = normalizePlace(value);
+  if (["caba", "capital federal", "ciudad autonoma de buenos aires"].includes(token)) {
+    return ["caba", "capital federal", "ciudad autonoma de buenos aires"];
+  }
+  if (["pba", "provincia de buenos aires", "buenos aires"].includes(token)) {
+    return ["buenos aires", "provincia de buenos aires", "pba"];
+  }
+  return token ? [token] : [];
+}
+function matchesPlace(value, haystack) {
+  return placeAliases(value).some(alias => alias.length >= 3 && haystack.includes(alias));
+}
+function resultMatchesRequestedArea(address, result) {
+  const parts = cleanAddress(address).split(",").map(p => p.trim()).filter(Boolean)
+    .filter(p => !/^argentina$/i.test(p));
+  const admin = resultAdminText(result);
+  const subdivision = normalizePlace(result?.address?.countrySubdivision || "");
+  // Si solo se recibió una calle sin localidad/provincia, no hay contexto suficiente
+  // para garantizar que TomTom ubicó el punto correcto: no cotizar a ciegas.
+  if (parts.length < 2) return false;
+
+  const requestedProvince = parts[parts.length - 1];
+  const provinceAliases = placeAliases(requestedProvince);
+  const provinceWasExplicit = provinceAliases.length > 0;
+  if (provinceWasExplicit && !matchesPlace(requestedProvince, subdivision) &&
+      !matchesPlace(requestedProvince, admin)) return false;
+
+  // Exigir también coincidencia con localidad/partido, no solo con la provincia.
+  // Ignoramos términos genéricos como "capital" que pueden aparecer en otra región.
+  const localityParts = parts.slice(0, -1).filter(p => {
+    const n = normalizePlace(p);
+    return n.length >= 3 && !["capital", "centro", "argentina"].includes(n);
+  });
+  if (!localityParts.length) return false;
+  return localityParts.some(part => matchesPlace(part, admin));
 }
 function withArgentina(value) {
   const text = cleanAddress(value);
   return /argentina/i.test(text) ? text : `${text}, Argentina`;
 }
 async function tomtomGeocode(address) {
-  const direct = parseCoordinates(cleanAddress(address).replace(/,?\\s*argentina\\s*$/i, ""));
+  const direct = parseCoordinates(cleanAddress(address).replace(/,?\s*argentina\s*$/i, ""));
   if (direct) return direct;
   // Corrección puntual para la referencia genérica RP11 confirmada por el operador.
   // Se aplica aquí porque este módulo intercepta las consultas de mapas en producción.
@@ -67,8 +119,12 @@ async function tomtomGeocode(address) {
   if (!response.ok) throw new Error(`TomTom geocode HTTP ${response.status}`);
   const data = await response.json();
   const results = Array.isArray(data?.results) ? data.results : [];
-  const best = results.find(r => validArgentinaPoint(Number(r?.position?.lat), Number(r?.position?.lon)));
-  if (!best) throw new Error(`TomTom sin resultado para: ${cleanAddress(address)}`);
+  const candidates = results.filter(r => validArgentinaPoint(Number(r?.position?.lat), Number(r?.position?.lon)));
+  const best = candidates.find(r => resultMatchesRequestedArea(address, r));
+  if (!best) {
+    const areas = candidates.map(r => r?.address?.freeformAddress || r?.address?.countrySubdivision || "ubicación sin datos administrativos").slice(0, 3);
+    throw new Error(`TomTom sin resultado compatible con la localidad/provincia solicitada: ${cleanAddress(address)}${areas.length ? `. Resultados descartados: ${areas.join(" | ")}` : ""}`);
+  }
   const point = { lat: Number(best.position.lat), lng: Number(best.position.lon), displayName: best?.address?.freeformAddress || query, provider: "TomTom" };
   cacheSet(geocodeCache, cacheKey, point);
   console.log(`[Asistir24 Maps] TomTom geocode: ${cleanAddress(address)} -> ${point.lat},${point.lng}`);
