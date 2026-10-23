@@ -54,22 +54,42 @@ function resultAdminText(result) {
     a.municipalitySubdivision, a.localName, a.freeformAddress
   ].filter(Boolean).join(" "));
 }
+function placeAliases(value) {
+  const token = normalizePlace(value);
+  if (["caba", "capital federal", "ciudad autonoma de buenos aires"].includes(token)) {
+    return ["caba", "capital federal", "ciudad autonoma de buenos aires"];
+  }
+  if (["pba", "provincia de buenos aires", "buenos aires"].includes(token)) {
+    return ["buenos aires", "provincia de buenos aires", "pba"];
+  }
+  return token ? [token] : [];
+}
+function matchesPlace(value, haystack) {
+  return placeAliases(value).some(alias => alias.length >= 3 && haystack.includes(alias));
+}
 function resultMatchesRequestedArea(address, result) {
-  const parts = cleanAddress(address).split(",").map(p => p.trim()).filter(Boolean);
-  const expected = parts.slice(1).filter(p => !/^argentina$/i.test(p));
-  if (!expected.length) return true;
+  const parts = cleanAddress(address).split(",").map(p => p.trim()).filter(Boolean)
+    .filter(p => !/^argentina$/i.test(p));
   const admin = resultAdminText(result);
-  const lastExpected = normalizePlace(expected[expected.length - 1]);
   const subdivision = normalizePlace(result?.address?.countrySubdivision || "");
-  // Never accept a result from a different province when the query names one.
-  if (lastExpected && subdivision && lastExpected !== subdivision &&
-      !subdivision.includes(lastExpected) && !lastExpected.includes(subdivision)) return false;
-  // Prefer an administrative match; if the provider returned no usable admin fields,
-  // fail closed instead of quoting with an unrelated Argentine result.
-  return expected.some(part => {
-    const token = normalizePlace(part);
-    return token.length >= 3 && (admin.includes(token) || (subdivision && token.includes(subdivision)));
+  // Si solo se recibió una calle sin localidad/provincia, no hay contexto suficiente
+  // para garantizar que TomTom ubicó el punto correcto: no cotizar a ciegas.
+  if (parts.length < 2) return false;
+
+  const requestedProvince = parts[parts.length - 1];
+  const provinceAliases = placeAliases(requestedProvince);
+  const provinceWasExplicit = provinceAliases.length > 0;
+  if (provinceWasExplicit && !matchesPlace(requestedProvince, subdivision) &&
+      !matchesPlace(requestedProvince, admin)) return false;
+
+  // Exigir también coincidencia con localidad/partido, no solo con la provincia.
+  // Ignoramos términos genéricos como "capital" que pueden aparecer en otra región.
+  const localityParts = parts.slice(0, -1).filter(p => {
+    const n = normalizePlace(p);
+    return n.length >= 3 && !["capital", "centro", "argentina"].includes(n);
   });
+  if (!localityParts.length) return false;
+  return localityParts.some(part => matchesPlace(part, admin));
 }
 function withArgentina(value) {
   const text = cleanAddress(value);
